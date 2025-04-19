@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Book" ADD COLUMN     "cost" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "points" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "vip_status" BOOLEAN NOT NULL DEFAULT false;

@@ -41,7 +41,11 @@ model User {
   auth_provider    String   @db.VarChar(50)
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
+  points           Int      @default(0)
+  vip_status       Boolean  @default(false)
   Book             Book[]
+
+  @@index([username, email, auth_provider_id])
 }
 
 model Level {
@@ -88,6 +92,12 @@ enum BookVisibility {
   PRIVATE
 }
 
+enum BookType {
+  TRANSLATED
+  ORIGINAL
+  MACHINE_TRANSLATED
+}
+
 model Book {
   id            Int            @id @default(autoincrement())
   title         String         @db.VarChar(150)
@@ -104,11 +114,15 @@ model Book {
   words_count   Int            @default(0)
   rating        Float          @default(0)
   reviews_count Int            @default(0)
+  cost          Int            @default(0)
   created_at    DateTime       @default(now())
   updated_at    DateTime       @updatedAt
+  type          BookType       @default(ORIGINAL)
   BookCategory  BookCategory[]
   BookTag       BookTag[]
   Chapter       Chapter[]
+
+  
 
   @@index([title, author])
 }

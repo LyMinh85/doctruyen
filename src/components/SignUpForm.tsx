@@ -30,6 +30,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 import { EmailCodeSchema, emailCodeSchema } from "@/schemas/email-code-schema";
 import { cn } from "@/lib/utils";
 import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
+import { getGenderLabel } from "@/enums/gender";
 
 export default function SignUpForm() {
   const form = useForm<SignUpFormSchema>({
@@ -260,10 +261,10 @@ export default function SignUpForm() {
                   onValueChange={field.onChange}
                   defaultValue={field.value}
                 >
-                  {Object.values(Gender).map((gender) => (
+                  {Object.values(Gender).map((gender: Gender) => (
                     <div key={gender} className="flex items-center space-x-2">
                       <RadioGroupItem value={gender} id={gender} />
-                      <Label htmlFor={gender}>{gender}</Label>
+                      <Label htmlFor={gender}>{getGenderLabel(gender)}</Label>
                     </div>
                   ))}
                 </RadioGroup>
@@ -276,6 +277,9 @@ export default function SignUpForm() {
         <p className={cn("text-destructive text-sm font-medium")}>
           {form.formState.errors.root?.message}
         </p>
+
+        {/* CAPTCHA Widget */}
+        <div id="clerk-captcha"></div>
 
         <Button
           type="submit"

@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient, User } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -23,6 +23,23 @@ export class UserService {
       }
       console.error(error);
       return { error: "Internal Server Error" };
+    }
+  }
+
+  public static async getUserByAuthProviderId(
+    authProviderId: string
+  ): Promise<User | null> {
+    try {
+      const user = await prisma.user.findFirst({
+        where: {
+          auth_provider_id: authProviderId,
+        },
+      });
+
+      return user;
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      return null;
     }
   }
 }

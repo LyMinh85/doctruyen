@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "BookType" AS ENUM ('TRANSLATED', 'ORIGINAL', 'MACHINE_TRANSLATED');
+
+-- AlterTable
+ALTER TABLE "Book" ADD COLUMN     "type" "BookType" NOT NULL DEFAULT 'ORIGINAL';

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     return Response.json({ error: validatedData.error }, { status: 400 });
   }
   const clerkUser = await clerkClient.users.getUser(body.authProviderId);
-  const passwordHash = bcrypt.hashSync(validatedData.password, saltRounds);
+  const passwordHash = bcrypt.hashSync(validatedData.password as string, saltRounds);
   const newUser = await UserService.createUser({
     username: validatedData.username,
     email: validatedData.email,
