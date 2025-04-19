@@ -445,6 +445,12 @@ export class TranslationService {
               if (translated.includes("/")) {
                 translated = translated.split("/")[0];
               }
+              if (translated.includes("|")) {
+                translated = translated.split("|")[0];
+              }
+              if (translated.includes("(")) {
+                translated = translated.split("(")[0];
+              }
 
               this.appendTranslatedWordWithIndex(
                 result,
@@ -460,6 +466,12 @@ export class TranslationService {
               let translated = "[" + this.dictionaries.onlyName[phrase] + "]";
               if (translated.includes("/")) {
                 translated = translated.split("/")[0];
+              }
+              if (translated.includes("|")) {
+                translated = translated.split("|")[0];
+              }
+              if (translated.includes("(")) {
+                translated = translated.split("(")[0];
               }
 
               this.appendTranslatedWordWithIndex(
@@ -513,6 +525,14 @@ export class TranslationService {
                   translated = translated.split("/")[0];
                 }
 
+                if (translated.includes("|")) {
+                  translated = translated.split("|")[0];
+                }
+
+                if (translated.includes("(")) {
+                  translated = translated.split("(")[0];
+                }
+
                 this.appendTranslatedWordWithIndex(
                   result,
                   translated,
@@ -528,6 +548,14 @@ export class TranslationService {
                   "[" + this.dictionaries.vietPhraseOneMeaning[phrase] + "]";
                 if (translated.includes("/")) {
                   translated = translated.split("/")[0];
+                }
+
+                if (translated.includes("|")) {
+                  translated = translated.split("|")[0];
+                }
+
+                if (translated.includes("(")) {
+                  translated = translated.split("(")[0];
                 }
 
                 this.appendTranslatedWordWithIndex(
@@ -713,10 +741,16 @@ export class TranslationService {
           lastTranslatedWordRef.value =
             lastTranslatedWordRef.value + " " + chinese[i];
           vietPhraseRanges.push({ startIndex: resultLength, length: 2 });
-        } else {
+        }
+        //is number
+        else if (chinese[i].match(/^[0-9]+$/)) {
           result.append(chinese[i]);
           lastTranslatedWordRef.value += chinese[i];
           vietPhraseRanges.push({ startIndex: resultLength, length: 1 });
+        } else {
+          result.append(" " + chinese[i]);
+          lastTranslatedWordRef.value += " " + chinese[i];
+          vietPhraseRanges.push({ startIndex: resultLength, length: 2 });
         }
 
         i++;
@@ -1138,8 +1172,9 @@ export class TranslationService {
         .replace(/&ensp;/gim, "  ")
         .replace(/&emsp;/gim, "    ")
         .replace(/(?<=\p{Script=Han})的(?=\p{Script=Han})/gu, "")
-        // remove "了" if the sentence ends with "了"
-        .replace(/了$/gim, "")
+        // remove "了" if the sentence ends with "了" not followed by a Chinese character
+        .replace(/(?<=\p{Script=Han})了/gu, "")
+        // .replace(/了$/gim, "")
         .replaceAll("　　", "")
     );
   }
@@ -1157,7 +1192,13 @@ export class TranslationService {
       .replaceAll("。", ".")
       .replaceAll("：", ":")
       .replaceAll("？", "?")
-      .replaceAll("！", "!");
+      .replaceAll("！", "!")
+      .replaceAll("“", '"')
+      .replaceAll("”", '"')
+      .replaceAll("no-meaning", "")
+      .replaceAll("、", ",")
+      .replaceAll(" ,", ",")
+      .replaceAll(" .", ".");
     const sentences = text.split("\n");
     const formattedSentences = sentences.map((sentence) => {
       let trimmedSentence = sentence.trim();
@@ -1167,9 +1208,15 @@ export class TranslationService {
       // Capitalize the first letter of the sentence
       if (trimmedSentence.length > 0) {
         // If the sentence begin with a quote, capitalize the first letter after the quote
-        if (trimmedSentence.startsWith("“")) {
-          const quoteIndex = trimmedSentence.indexOf("“", 0);
+        if (trimmedSentence.startsWith('"')) {
+          const quoteIndex = trimmedSentence.indexOf('"', 0);
           if (quoteIndex !== -1) {
+            if (trimmedSentence.charAt(quoteIndex + 1) === " ") {
+              // remove the space after the quote
+              trimmedSentence =
+                trimmedSentence.slice(0, quoteIndex + 1) +
+                trimmedSentence.slice(quoteIndex + 2);
+            }
             trimmedSentence =
               trimmedSentence.slice(0, quoteIndex + 1) +
               trimmedSentence.charAt(quoteIndex + 1).toUpperCase() +
@@ -1178,6 +1225,12 @@ export class TranslationService {
         } else if (trimmedSentence.startsWith("'")) {
           const quoteIndex = trimmedSentence.indexOf("'", 0);
           if (quoteIndex !== -1) {
+            if (trimmedSentence.charAt(quoteIndex + 1) === " ") {
+              // remove the space after the quote
+              trimmedSentence =
+                trimmedSentence.slice(0, quoteIndex + 1) +
+                trimmedSentence.slice(quoteIndex + 2);
+            }
             trimmedSentence =
               trimmedSentence.slice(0, quoteIndex + 1) +
               trimmedSentence.charAt(quoteIndex + 1).toUpperCase() +
