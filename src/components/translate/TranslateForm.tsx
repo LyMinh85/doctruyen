@@ -122,7 +122,7 @@ export default function TranslationApp() {
                 </Button>
               </div>
               <div
-                className="flex-1 p-6 rounded-2xl bg-[#f0ebe2] overflow-auto"
+                className="flex-1 p-6 rounded-2xl bg-[#f0ebe2] overflow-auto border border-[#d9cfc1]"
                 style={{ fontSize: `${fontSize}px` }}
                 dangerouslySetInnerHTML={{
                   __html: outputText,
@@ -137,10 +137,18 @@ export default function TranslationApp() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-4xl md:text-5xl font-bold text-[#8b7755] mb-6 md:mb-10"
+        className="text-4xl md:text-5xl w-full max-w-sm md:max-w-full text-center font-bold text-[#8b7755] mb-6 md:mb-10"
       >
-        Dịch tiếng trung
+        Dịch tiếng Trung sang tiếng Việt
       </motion.h1>
+      <div className="hidden">
+        <h2>Công cụ dịch thông minh</h2>
+        <p className="text-gray-600 mb-6">
+          Dịch máy tiếng Trung sang tiếng Việt miễn phí, nhanh chóng, không cần
+          đăng ký. Phù hợp cho việc đọc tiểu thuyết Trung Quốc.
+        </p>
+        <h2>Làm sao để dịch nhanh?</h2>
+      </div>
 
       <div className="w-full max-w-6xl">
         <div className="flex flex-col lg:flex-row gap-6">
@@ -184,7 +192,7 @@ export default function TranslationApp() {
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#8b7755]">
-                      Translation Type
+                      Kiểu dịch
                     </label>
                     <Select
                       value={translationType}
@@ -205,7 +213,7 @@ export default function TranslationApp() {
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#8b7755]">
-                      Translation Engine
+                      Công nghệ dịch
                     </label>
                     <Select
                       value={translationEngine}

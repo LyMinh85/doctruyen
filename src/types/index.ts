@@ -4,6 +4,6 @@ export enum TranslationEngine {
 
 export enum TranslationType {
   Vietnamese = "Tiếng Việt",
-  Chinese = "Tiếng Trung",
-  SinoVietnamse = "Hán Việt",
+  // Chinese = "Tiếng Trung",
+  // SinoVietnamse = "Hán Việt",
 }

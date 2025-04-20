@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ProgressBarProvider from "@/providers/ProgressBarProvider";
 import { ClerkProvider } from "@clerk/nextjs";
+import { GoogleAnalytics } from '@next/third-parties/google'
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,6 +33,7 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
           <ProgressBarProvider>{children}</ProgressBarProvider>
+          <GoogleAnalytics gaId="G-18BE59SBKH" />
         </body>
       </html>
     </ClerkProvider>

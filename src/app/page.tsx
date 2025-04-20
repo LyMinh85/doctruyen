@@ -1,8 +1,6 @@
 import Container from "@/components/common/Container";
 import Banner from "@/components/home/Banner";
 import { Navbar } from "@/components/Navbar";
-import BookGrid from "@/components/books/BookGrid";
-import { mockBooks } from "@/lib/mock-data";
 import {
   Card,
   CardDescription,
@@ -10,8 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import UnderlineLink from "@/components/common/UnderlineLink";
 
 export default function HomePage() {
@@ -28,8 +24,8 @@ export default function HomePage() {
           <Card>
             <CardHeader>
               <CardTitle>
-                <UnderlineLink className="text-2xl" href="/translate">
-                  Dịch máy tiếng trung
+                <UnderlineLink className="text-xl" href="/dich-trung-viet">
+                  Dịch máy tiếng Trung sang tiếng Việt
                 </UnderlineLink>
               </CardTitle>
               <CardDescription>
