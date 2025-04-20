@@ -21,6 +21,7 @@ import {
 } from "@/lib/utils";
 import { TranslationService } from "@/services/translate-service";
 import { TranslationEngine, TranslationType } from "@/types";
+import Container from "../common/Container";
 
 export default function TranslationApp() {
   const [inputText, setInputText] = useState<string>(``);
@@ -31,7 +32,6 @@ export default function TranslationApp() {
     TranslationEngine.RuleBaseMT
   );
   const [fontSize, setFontSize] = useState<number>(16);
-  const [expanded, setExpanded] = useState<boolean>(false);
   const [outputText, setOutputText] = useState<string>("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loadingDict, setLoadingDict] = useState(true);
@@ -56,7 +56,9 @@ export default function TranslationApp() {
       try {
         const [names, vietphrase, hanViet, luatNhan] = await Promise.all([
           loadDictionaryByNameInClient(DictFilePath.compressedNames),
-          loadDictionaryByNameInClient(DictFilePath.compressedVietphraseQuickTranslator),
+          loadDictionaryByNameInClient(
+            DictFilePath.compressedVietphraseQuickTranslator
+          ),
           loadDictionaryByNameInClient(DictFilePath.hanViet),
           loadDictionaryByNameInClient(DictFilePath.luatNhan),
         ]);
@@ -105,26 +107,28 @@ export default function TranslationApp() {
             exit={{ opacity: 0, scale: 0.9 }}
             className="fixed inset-0 z-50 bg-[#f8f5f0] flex flex-col p-4 md:p-8"
           >
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-[#8b7755]">
-                {translationType}
-              </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleFullscreen}
-                className="hover:bg-[#f0ebe2] hover:text-[#8b7755]"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-            <div
-              className="flex-1 p-6 rounded-2xl bg-[#f0ebe2] overflow-auto"
-              style={{ fontSize: `${fontSize}px` }}
-              dangerouslySetInnerHTML={{
-                __html: outputText,
-              }}
-            ></div>
+            <Container maxWidth="lg" className="w-full h-full flex flex-col">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-[#8b7755]">
+                  {translationType}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleFullscreen}
+                  className="hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              <div
+                className="flex-1 p-6 rounded-2xl bg-[#f0ebe2] overflow-auto"
+                style={{ fontSize: `${fontSize}px` }}
+                dangerouslySetInnerHTML={{
+                  __html: outputText,
+                }}
+              ></div>
+            </Container>
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -162,20 +166,15 @@ export default function TranslationApp() {
                   placeholder="Nhập văn bản tiếng Trung ở đây..."
                   className="min-h-[200px] resize-y border-[#d9cfc1] focus-visible:ring-[#8b7755]"
                 />
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute bottom-8 right-8 bg-white border-[#d9cfc1] hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+                  onClick={handlePaste}
                 >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="absolute bottom-8 right-8 bg-white border-[#d9cfc1] hover:bg-[#f0ebe2] hover:text-[#8b7755]"
-                    onClick={handlePaste}
-                  >
-                    <Clipboard className="h-4 w-4 mr-1" />
-                    Paste
-                  </Button>
-                </motion.div>
+                  <Clipboard className="h-4 w-4 mr-1" />
+                  Paste
+                </Button>
               </CardContent>
             </Card>
 

@@ -11,7 +11,7 @@ export default function Banner() {
       />
       <div className="absolute inset-0 bg-black opacity-20"></div>
       <div className="absolute inset-0 flex items-center justify-center text-white">
-        <h1 className="text-4xl font-bold">Welcome to Our Book Store</h1>
+        <h1 className="text-4xl font-bold">Welcome to Doctruyen</h1>
       </div>
     </div>
   );
