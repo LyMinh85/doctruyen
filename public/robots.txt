@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://doctruyen.space
+
+# Sitemaps
+Sitemap: https://doctruyen.space/sitemap.xml

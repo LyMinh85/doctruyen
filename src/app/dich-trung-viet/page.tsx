@@ -1,5 +1,5 @@
 import TranslationApp from "@/components/translate/TranslateForm";
-import { Head } from "next/document";
+import Head from 'next/head';
 
 export const metadata = {
   title: "Dịch máy tiếng Trung sang tiếng Việt online | doctruyen",
@@ -28,7 +28,7 @@ export const metadata = {
       "Công cụ dịch máy tiếng Trung sang tiếng Việt miễn phí, nhanh chóng, không cần đăng ký.",
   },
   alternates: {
-    canonical: "https://doctruyen.space/translate",
+    canonical: "https://doctruyen.space/dich-trung-viet",
   },
 };
 
