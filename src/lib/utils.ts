@@ -8,18 +8,24 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const DEFAULT_AVATAR_URL = "/default-avatar.jpg";
-export const BASE_DICTIONARY_PATH = "/data/dictionaries";
+export const UNCOMPRESSED_DICT_PATH = "/data/dictionaries";
+export const COMPRESSED_DICT_PATH = "/dicts";
 
 export enum DictionaryFilePath {
-  names = `${BASE_DICTIONARY_PATH}/Names.txt`,
-  compressedNames = `${BASE_DICTIONARY_PATH}/Names.txt.gz`,
-  names2 = `${BASE_DICTIONARY_PATH}/Names2.txt`,
-  vietphrase = `${BASE_DICTIONARY_PATH}/VietPhrase.txt`,
-  hanViet = `${BASE_DICTIONARY_PATH}/ChinesePhienAmWords.txt`,
-  luatNhan = `${BASE_DICTIONARY_PATH}/LuatNhan.txt`,
-  vietphraseQuickTranslator = `${BASE_DICTIONARY_PATH}/VietPhraseQuickTranslator.txt`,
-  compressedVietphraseQuickTranslator = `${BASE_DICTIONARY_PATH}/VietPhraseQuickTranslator.txt.gz`,
+  names = `/Names.txt`,
+  names2 = `/Names2.txt`,
+  hanViet = `/ChinesePhienAmWords.txt`,
+  luatNhan = `/LuatNhan.txt`,
+  vietphraseQuickTranslator = `/VietPhraseQuickTranslator.txt`,
 }
+
+export const dictionariesData = Object.entries(DictionaryFilePath)
+  .filter(([key, filePath]) => !key.includes("/"))
+  .map(([key, filePath]) => ({
+    id: key,
+    name: filePath.split("/").pop()?.split(".")[0] || "Unknown",
+    filePath: `${UNCOMPRESSED_DICT_PATH}${filePath}`,
+  }));
 
 /**
  * Returns the key corresponding to a given dictionary file path.
@@ -53,15 +59,7 @@ export const getKeyFromDictionaryFilePath = (
 export const loadDictionaryByNameInClient = async (
   dictFilePath: DictionaryFilePath
 ): Promise<Record<string, string>> => {
-  const res = await fetch(
-    `/api/dictionaries/${getKeyFromDictionaryFilePath(dictFilePath)}`,
-    {
-      cache: "force-cache", // Use browser cache if available
-      next: {
-        revalidate: 60 * 60 * 24 * 30, // Revalidate 1 month
-      },
-    }
-  );
+  const res = await fetch(`${COMPRESSED_DICT_PATH}/${getKeyFromDictionaryFilePath(dictFilePath)}.txt.gz`);
   const arrayBuffer = await res.arrayBuffer();
   const rawDict = await decompressWithPako(arrayBuffer);
   return TranslationService.parseDictionaryFile(rawDict);

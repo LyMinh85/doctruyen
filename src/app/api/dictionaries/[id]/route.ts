@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createGzip } from "zlib";
 import { join } from "path";
 import { createReadStream } from "fs";
+import { promises as fsPromises } from "fs";
 import { DictionaryFilePath } from "@/lib/utils";
 
 export async function GET(
@@ -10,12 +11,12 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    
+
     const dictPath = DictionaryFilePath[id as keyof typeof DictionaryFilePath];
     if (!dictPath) {
       return new NextResponse("File not found", { status: 404 });
     }
-    
+
     // Path to the existing .txt file
     const filePath = join(process.cwd(), "src", dictPath);
     const readStream = createReadStream(filePath);
@@ -29,13 +30,26 @@ export async function GET(
     }
     const compressedBuffer = Buffer.concat(compressedChunks);
 
-    // Set response headers
-    const headers = new Headers();
-    headers.set("Content-Type", "application/gzip");
-    headers.set("Content-Disposition", `attachment; filename="${id}.txt.gz"`);
-    headers.set("Content-Length", compressedBuffer.length.toString());
+    // Save compressed file to public/dicts directory
+    const saveDir = join(process.cwd(), "public", "dicts");
 
-    return new NextResponse(compressedBuffer, { headers });
+    // Create directory if it doesn't exist
+    await fsPromises.mkdir(saveDir, { recursive: true });
+
+    // Save the compressed file
+    const savePath = join(saveDir, `${id}.txt.gz`);
+    await fsPromises.writeFile(savePath, compressedBuffer);
+    console.log(`File saved to: ${savePath}`);
+
+    return NextResponse.json(
+      {
+        message: "File compressed successfully",
+        filePath: savePath,
+      },
+      {
+        status: 200,
+      }
+    );
   } catch (error) {
     console.error("Error compressing file:", error);
     return new NextResponse("Error generating file", { status: 500 });

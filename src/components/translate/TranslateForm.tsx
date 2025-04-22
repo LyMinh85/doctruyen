@@ -963,7 +963,7 @@ function TranslateWebsiteFullscreen({
           ref={iframeRef}
           srcDoc={translatedHtml}
           className="w-full h-[calc(100vh-50px)]"
-          sandbox="allow-scripts allow-same-origin allow-forms "
+          sandbox="allow-scripts allow-same-origin"
         />
       )}
     </div>
