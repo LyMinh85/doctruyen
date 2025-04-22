@@ -1,25 +1,44 @@
 import { TranslationService } from "@/services/translate-service";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import pako from 'pako';
+import pako from "pako";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export const DEFAULT_AVATAR_URL = "/default-avatar.jpg";
+export const BASE_DICTIONARY_PATH = "/data/dictionaries";
 
-export enum DictFilePath {
-  names = "/dicts/Names.txt",
-  compressedNames = "/dicts/Names.txt.gz",
-  names2 = "/dicts/Names2.txt",
-  vietphrase = "/dicts/VietPhrase.txt",
-  hanViet = "/dicts/ChinesePhienAmWords.txt",
-  luatNhan = "/dicts/LuatNhan.txt",
-  vietphraseQuickTranslator = "/dicts/VietPhraseQuickTranslator.txt",
-  compressedVietphraseQuickTranslator = "/dicts/VietPhraseQuickTranslator.txt.gz",
-  // "/dicts/cautruc.txt",
+export enum DictionaryFilePath {
+  names = `${BASE_DICTIONARY_PATH}/Names.txt`,
+  compressedNames = `${BASE_DICTIONARY_PATH}/Names.txt.gz`,
+  names2 = `${BASE_DICTIONARY_PATH}/Names2.txt`,
+  vietphrase = `${BASE_DICTIONARY_PATH}/VietPhrase.txt`,
+  hanViet = `${BASE_DICTIONARY_PATH}/ChinesePhienAmWords.txt`,
+  luatNhan = `${BASE_DICTIONARY_PATH}/LuatNhan.txt`,
+  vietphraseQuickTranslator = `${BASE_DICTIONARY_PATH}/VietPhraseQuickTranslator.txt`,
+  compressedVietphraseQuickTranslator = `${BASE_DICTIONARY_PATH}/VietPhraseQuickTranslator.txt.gz`,
 }
+
+/**
+ * Returns the key corresponding to a given dictionary file path.
+ *
+ * @param dictFilePath - The dictionary file path to look up
+ * @returns The key associated with the dictionary file path
+ * @throws Error if the dictionary file path is not found
+ */
+export const getKeyFromDictionaryFilePath = (
+  dictFilePath: DictionaryFilePath
+): string => {
+  const keys = Object.keys(DictionaryFilePath);
+  const values = Object.values(DictionaryFilePath);
+  const index = values.indexOf(dictFilePath);
+  if (index === -1) {
+    throw new Error(`Dictionary file path not found: ${dictFilePath}`);
+  }
+  return keys[index];
+};
 
 /**
  * Loads a dictionary file by its path in a client environment.
@@ -32,17 +51,19 @@ export enum DictFilePath {
  * @async
  */
 export const loadDictionaryByNameInClient = async (
-  dictFilePath: DictFilePath
+  dictFilePath: DictionaryFilePath
 ): Promise<Record<string, string>> => {
-  const res = await fetch(dictFilePath);
-  if (dictFilePath === DictFilePath.compressedVietphraseQuickTranslator
-    || dictFilePath === DictFilePath.compressedNames
-  ) {
-    const arrayBuffer = await res.arrayBuffer();
-    const rawDict = await decompressWithPako(arrayBuffer);
-    return TranslationService.parseDictionaryFile(rawDict);
-  }
-  const rawDict = await res.text();
+  const res = await fetch(
+    `/api/dictionaries/${getKeyFromDictionaryFilePath(dictFilePath)}`,
+    {
+      cache: "force-cache", // Use browser cache if available
+      next: {
+        revalidate: 60 * 60 * 24 * 30, // Revalidate 1 month
+      },
+    }
+  );
+  const arrayBuffer = await res.arrayBuffer();
+  const rawDict = await decompressWithPako(arrayBuffer);
   return TranslationService.parseDictionaryFile(rawDict);
 };
 

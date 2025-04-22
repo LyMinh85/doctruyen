@@ -1,5 +1,5 @@
 export enum TranslationEngine {
-  RuleBaseMT = "Rule-Based MT",
+  Vietphrase = "Vietphrase",
 }
 
 export enum TranslationType {

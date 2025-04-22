@@ -375,7 +375,8 @@ export class TranslationService {
     chinese: string,
     wrapType: number = 0,
     translationAlgorithm: number = 1,
-    prioritizedName: boolean = true
+    prioritizedName: boolean = true,
+    isFormatResult: boolean = true
   ): {
     text: string;
     chinesePhraseRanges: CharRange[];
@@ -501,7 +502,6 @@ export class TranslationService {
             break;
           } else if (
             // Try to match in vietPhraseOneMeaning dictionary
-
             this.dictionaries.vietPhraseOneMeaning[phrase] !== undefined
           ) {
             if (
@@ -726,6 +726,15 @@ export class TranslationService {
             startIndex: resultLength,
             length: effectiveLength,
           });
+        }
+        //is number or english alphabets
+        else if (
+          chinese[i].match(/^[0-9]+$/) ||
+          chinese[i].match(/^[A-Za-z]+$/)
+        ) {
+          result.append(chinese[i]);
+          lastTranslatedWordRef.value += chinese[i];
+          vietPhraseRanges.push({ startIndex: resultLength, length: 1 });
         } else if (
           (chinese[i] === '"' || chinese[i] === "'") &&
           !lastTranslatedWordRef.value.endsWith(" ") &&
@@ -741,12 +750,6 @@ export class TranslationService {
           lastTranslatedWordRef.value =
             lastTranslatedWordRef.value + " " + chinese[i];
           vietPhraseRanges.push({ startIndex: resultLength, length: 2 });
-        }
-        //is number
-        else if (chinese[i].match(/^[0-9]+$/)) {
-          result.append(chinese[i]);
-          lastTranslatedWordRef.value += chinese[i];
-          vietPhraseRanges.push({ startIndex: resultLength, length: 1 });
         } else {
           result.append(" " + chinese[i]);
           lastTranslatedWordRef.value += " " + chinese[i];
@@ -758,12 +761,75 @@ export class TranslationService {
     }
 
     this.lastTranslated.vietPhraseOneMeaning = "";
-    result.text = this.formatResult(result.text);
+    if (isFormatResult) {
+      result.text = this.formatResult(result.text);
+    }
     return {
       text: result.text,
       chinesePhraseRanges,
       vietPhraseRanges,
     };
+  }
+
+  /**
+   * Translates Chinese text in an HTML page to Vietnamese using chineseToVietPhraseOneMeaning
+   * @param htmlContent The HTML content as a string
+   * @param wrapType Type of wrapping (0 = none, 1 = brackets)
+   * @param translationAlgorithm Algorithm to use for translation
+   * @param prioritizedName Whether to prioritize names
+   * @returns The translated HTML content as a string
+   */
+  public static translateHtmlPage(
+    htmlContent: string,
+    wrapType: number = 0,
+    translationAlgorithm: number = 1,
+    prioritizedName: boolean = true,
+    isFormatResult: boolean = false
+  ): string {
+    // Parse HTML content into a DOM tree
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, "text/html");
+
+    // Function to process text nodes recursively
+    function processNode(node: Node) {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent) {
+        // Skip empty text nodes or those with only whitespace
+        if (node.textContent.trim().length === 0) {
+          return;
+        }
+
+        // Check if the text contains Chinese characters
+        const hasChinese = /[\u4e00-\u9fff]/.test(node.textContent);
+        if (hasChinese) {
+          // Translate the text using chineseToVietPhraseOneMeaning
+          const translationResult = TranslationService.chineseToVietPhraseOneMeaning(
+            node.textContent,
+            wrapType,
+            translationAlgorithm,
+            prioritizedName,
+            isFormatResult,
+          );
+          // Replace the text node's content with the translated text
+          node.textContent = translationResult.text;
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        // Skip script and style elements to avoid translating code
+        const tagName = (node as Element).tagName.toLowerCase();
+        if (tagName === "script" || tagName === "style") {
+          return;
+        }
+        // Process child nodes
+        for (const child of Array.from(node.childNodes)) {
+          processNode(child);
+        }
+      }
+    }
+
+    // Process all nodes in the document body
+    processNode(doc.body);
+
+    // Serialize the DOM back to a string
+    return new XMLSerializer().serializeToString(doc);
   }
 
   /**

@@ -1,5 +1,5 @@
 import TranslationApp from "@/components/translate/TranslateForm";
-import Head from 'next/head';
+import Head from "next/head";
 
 export const metadata = {
   title: "Dịch máy tiếng Trung sang tiếng Việt online | doctruyen",
@@ -32,7 +32,16 @@ export const metadata = {
   },
 };
 
-export default function TranslatePage() {
+interface TranslatePageProps {
+  searchParams: Promise<{
+    url: string;
+  }>;
+}
+
+export default async function TranslatePage({
+  searchParams,
+}: TranslatePageProps) {
+  const { url } = await searchParams;
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -53,7 +62,7 @@ export default function TranslatePage() {
       <Head>
         <script type="application/ld+json">{JSON.stringify(schemaData)}</script>
       </Head>
-      <TranslationApp />
+      <TranslationApp url={url} />
     </>
   );
 }

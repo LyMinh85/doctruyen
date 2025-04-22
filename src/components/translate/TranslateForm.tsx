@@ -1,8 +1,21 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clipboard, Expand, Minimize, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowRight,
+  Check,
+  Clipboard,
+  Copy,
+  Expand,
+  FileText,
+  Globe,
+  MessageSquare,
+  Settings,
+  Upload,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -15,27 +28,53 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import {
-  DictFilePath,
+  cn,
+  DictionaryFilePath,
   loadDictionaryByNameInClient,
   removeBrTags,
 } from "@/lib/utils";
 import { TranslationService } from "@/services/translate-service";
-import { TranslationEngine, TranslationType } from "@/types";
+import { TranslationEngine } from "@/types";
+import { Label } from "../ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { Input } from "../ui/input";
 import Container from "../common/Container";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-export default function TranslationApp() {
+interface TranslationAppProps {
+  url?: string;
+}
+
+export default function TranslationApp({ url }: TranslationAppProps) {
+  const [activeTab, setActiveTab] = useState("text");
   const [inputText, setInputText] = useState<string>(``);
-  const [translationType, setTranslationType] = useState<string>(
-    TranslationType.Vietnamese
-  );
   const [translationEngine, setTranslationEngine] = useState<string>(
-    TranslationEngine.RuleBaseMT
+    TranslationEngine.Vietphrase
   );
   const [fontSize, setFontSize] = useState<number>(16);
   const [outputText, setOutputText] = useState<string>("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loadingDict, setLoadingDict] = useState(true);
   const textareaRef = useRef(null);
+  // File translation state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [websiteUrl, setWebsiteUrl] = useState(url ?? "");
+  const router = useRouter();
+  const handleWebsiteTranslate = () => {
+    // Implement website translation logic here
+    // Add https:// if not present
+    if (!websiteUrl.startsWith("http") && !websiteUrl.startsWith("https")) {
+      router.push(
+        `/dich-trung-viet?url=${encodeURIComponent("https://" + websiteUrl)}`
+      );
+    } else {
+      router.push(`/dich-trung-viet?url=${encodeURIComponent(websiteUrl)}`);
+    }
+  };
 
   const handlePaste = async () => {
     try {
@@ -55,12 +94,12 @@ export default function TranslationApp() {
     async function loadDictionaries() {
       try {
         const [names, vietphrase, hanViet, luatNhan] = await Promise.all([
-          loadDictionaryByNameInClient(DictFilePath.compressedNames),
+          loadDictionaryByNameInClient(DictionaryFilePath.names),
           loadDictionaryByNameInClient(
-            DictFilePath.compressedVietphraseQuickTranslator
+            DictionaryFilePath.vietphraseQuickTranslator
           ),
-          loadDictionaryByNameInClient(DictFilePath.hanViet),
-          loadDictionaryByNameInClient(DictFilePath.luatNhan),
+          loadDictionaryByNameInClient(DictionaryFilePath.hanViet),
+          loadDictionaryByNameInClient(DictionaryFilePath.luatNhan),
         ]);
 
         TranslationService.loadAllDictionaries({
@@ -89,28 +128,105 @@ export default function TranslationApp() {
       1,
       true
     );
-    console.log("Translated Text:", translatedText);
     setOutputText(removeBrTags(translatedText.text));
   };
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
+    if (isFullscreen) {
+      document.documentElement.style.overflow = "auto";
+    } else {
+      document.documentElement.style.overflow = "hidden";
+    }
   };
+
+  const handleFileTranslate = () => {
+    console.log("Translating file:", selectedFile?.name);
+  };
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      setSelectedFile(file);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const copyToClipboard = () => {
+    // remove all html tab from outputText
+
+    const textWithoutHtml = outputText
+      .replaceAll("</p>", "\n")
+      .replace(/<[^>]+>/g, "");
+    navigator.clipboard.writeText(textWithoutHtml);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+  };
+
+  // Animation variants
+  const tabContentVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.5, ease: "easeOut" },
+    },
+    exit: { opacity: 0, y: -20, transition: { duration: 0.3 } },
+  };
+
+  // check if url and valided url
+  const isValidUrl = (url: string) => {
+    const pattern = new RegExp(
+      "^(https?:\\/\\/)?" + // protocol
+        "((([a-z\\d]([a-z\\d-]*[a-z\\d])?)\\.)+([a-z]{2,}|[a-z\\d-]{2,}))" + // domain name
+        "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*" + // path
+        "(\\?[;&a-z\\d%_.~+=-]*)?" + // query string
+        "(\\#[-a-z\\d_]*)?$",
+      "i"
+    );
+    return !!pattern.test(url);
+  };
+
+  if (url && isValidUrl(url)) {
+    return (
+      <TranslateWebsiteFullscreen
+        websiteUrl={websiteUrl}
+        setWebsiteUrl={setWebsiteUrl}
+        handleClickTranslate={handleTranslate}
+        loadingDict={loadingDict}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8f5f0] flex flex-col items-center p-4 md:p-8">
       <AnimatePresence>
-        {isFullscreen ? (
+        {isFullscreen && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed inset-0 z-50 bg-[#f8f5f0] flex flex-col p-4 md:p-8"
+            className="fixed inset-0 z-50 bg-[#f8f5f0] flex flex-col pt-4 md:pt-8"
           >
-            <Container maxWidth="lg" className="w-full h-full flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-[#8b7755]">
-                  {translationType}
+            <Container
+              maxWidth="lg"
+              className="w-full h-full flex flex-col px-0"
+            >
+              <div className="flex justify-between items-center mb-4 px-6 md:px-0">
+                <h2 className="text-xl font-bold text-[#8b7755]">
+                  Tiếng Trung
                 </h2>
                 <Button
                   variant="ghost"
@@ -122,25 +238,28 @@ export default function TranslationApp() {
                 </Button>
               </div>
               <div
-                className="flex-1 p-6 rounded-2xl bg-[#f0ebe2] overflow-auto border border-[#d9cfc1]"
-                style={{ fontSize: `${fontSize}px` }}
+                className="text-justify flex-1 p-6 rounded-t-2xl bg-[#f0ebe2] overflow-auto border border-[#d9cfc1]"
+                style={{
+                  fontSize: `${fontSize}px`,
+                }}
                 dangerouslySetInnerHTML={{
                   __html: outputText,
                 }}
               ></div>
             </Container>
           </motion.div>
-        ) : null}
+        )}
       </AnimatePresence>
 
       <motion.h1
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-4xl md:text-5xl w-full max-w-sm md:max-w-full text-center font-bold text-[#8b7755] mb-6 md:mb-10"
+        className="text-2xl md:text-3xl font-bold text-[#8b7755] mb-6 md:mb-8"
       >
         Dịch tiếng Trung sang tiếng Việt
       </motion.h1>
+
       <div className="hidden">
         <h2>Công cụ dịch thông minh</h2>
         <p className="text-gray-600 mb-6">
@@ -150,162 +269,703 @@ export default function TranslationApp() {
         <h2>Làm sao để dịch nhanh?</h2>
       </div>
 
-      <div className="w-full max-w-6xl">
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left Column - Input and Options */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="w-full lg:w-1/2 flex flex-col"
-          >
-            {/* Input Section */}
-            <Card className="mb-6 border-[#d9cfc1] shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg text-[#8b7755]">
-                  Tiếng trung
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="relative">
-                <Textarea
-                  ref={textareaRef}
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Nhập văn bản tiếng Trung ở đây..."
-                  className="min-h-[200px] resize-y border-[#d9cfc1] focus-visible:ring-[#8b7755]"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="absolute bottom-8 right-8 bg-white border-[#d9cfc1] hover:bg-[#f0ebe2] hover:text-[#8b7755]"
-                  onClick={handlePaste}
-                >
-                  <Clipboard className="h-4 w-4 mr-1" />
-                  Paste
-                </Button>
-              </CardContent>
-            </Card>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="w-full max-w-6xl"
+      >
+        <Tabs
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="w-full"
+        >
+          <TabsList className="grid w-full grid-cols-3 mb-6 bg-[#f0ebe2] p-1">
+            <TabsTrigger
+              value="text"
+              className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-[#8b7755] data-[state=active]:shadow-sm"
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span className="hidden sm:inline">Dịch văn bản</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="website"
+              className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-[#8b7755] data-[state=active]:shadow-sm"
+            >
+              <Globe className="h-4 w-4" />
+              <span className="hidden sm:inline">Dịch website</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="file"
+              className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:text-[#8b7755] data-[state=active]:shadow-sm"
+            >
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Dịch file</span>
+            </TabsTrigger>
+          </TabsList>
 
-            {/* Options Panel */}
-            <Card className="mb-6 border-[#d9cfc1] shadow-sm">
-              <CardContent className="pt-6">
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-[#8b7755]">
-                      Kiểu dịch
-                    </label>
-                    <Select
-                      value={translationType}
-                      onValueChange={setTranslationType}
+          <AnimatePresence mode="wait">
+            {/* Text Translation Tab */}
+            {activeTab === "text" && (
+              <TranslateMessageTab
+                key="text-tab"
+                tabContentVariants={tabContentVariants}
+                inputText={inputText}
+                setInputText={setInputText}
+                outputText={outputText}
+                setOutputText={setOutputText}
+                translationEngine={translationEngine}
+                setTranslationEngine={setTranslationEngine}
+                fontSize={fontSize}
+                setFontSize={setFontSize}
+                handlePaste={handlePaste}
+                handleTranslate={handleTranslate}
+                isFullscreen={isFullscreen}
+                toggleFullscreen={toggleFullscreen}
+                copied={copied}
+                copyToClipboard={copyToClipboard}
+              />
+            )}
+
+            {/* Website Translation Tab */}
+            {activeTab === "website" && (
+              <TranslateWebsiteTab
+                key="website-tab"
+                tabContentVariants={tabContentVariants}
+                translationEngine={translationEngine}
+                setTranslationEngine={setTranslationEngine}
+                websiteUrl={websiteUrl}
+                setWebsiteUrl={setWebsiteUrl}
+                handleWebsiteTranslate={handleWebsiteTranslate}
+              />
+            )}
+
+            {/* File Translation Tab */}
+            {activeTab === "file" && (
+              <TranslateFileTab
+                key="file-tab"
+                tabContentVariants={tabContentVariants}
+                selectedFile={selectedFile}
+                setSelectedFile={setSelectedFile}
+                isDragging={isDragging}
+                setIsDragging={setIsDragging}
+                handleFileDrop={handleFileDrop}
+                handleFileSelect={handleFileSelect}
+                translationEngine={translationEngine}
+                setTranslationEngine={setTranslationEngine}
+                handleFileTranslate={handleFileTranslate}
+              />
+            )}
+          </AnimatePresence>
+        </Tabs>
+      </motion.div>
+    </div>
+  );
+}
+
+interface TranslateMessageTabProps {
+  tabContentVariants: any;
+  inputText: string;
+  setInputText: (text: string) => void;
+  outputText: string;
+  setOutputText: (text: string) => void;
+  translationEngine: string;
+  setTranslationEngine: (engine: string) => void;
+  fontSize: number;
+  setFontSize: (size: number) => void;
+  handlePaste: () => void;
+  handleTranslate: () => void;
+  isFullscreen: boolean;
+  toggleFullscreen: () => void;
+  copied: boolean;
+  copyToClipboard: () => void;
+}
+
+function TranslateMessageTab({
+  tabContentVariants,
+  inputText,
+  setInputText,
+  outputText,
+  setOutputText,
+  translationEngine,
+  setTranslationEngine,
+  fontSize,
+  setFontSize,
+  handlePaste,
+  handleTranslate,
+  isFullscreen,
+  toggleFullscreen,
+  copied,
+  copyToClipboard,
+}: TranslateMessageTabProps & {
+  key: string;
+}) {
+  return (
+    <motion.div
+      key="text-tab"
+      variants={tabContentVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
+      <TabsContent value="text" className="mt-0">
+        <div
+          className={cn(
+            "flex flex-col lg:flex-row gap-6",
+            isFullscreen ? "overflow-hidden" : "overflow-auto"
+          )}
+        >
+          {/* Left Column - Input */}
+          <div className="w-full lg:w-1/2 flex flex-col">
+            <Card className="shadow-sm border-[#d9cfc1] h-auto">
+              <CardContent className="pt-6 h-auto">
+                <div className="flex justify-between items-center mb-2">
+                  <Label className="text-lg font-bold text-[#8b7755]">
+                    Tiếng trung
+                  </Label>
+                  <div className="flex items-center">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80" align="start">
+                        <div className="space-y-4">
+                          <h4 className="font-bold text-[#8b7755]">Cài đặt</h4>
+
+                          <div className="space-y-2">
+                            <Label className="text-[#8b7755]">
+                              Công nghệ dịch
+                            </Label>
+                            <Select
+                              value={translationEngine}
+                              onValueChange={setTranslationEngine}
+                            >
+                              <SelectTrigger className="border-[#d9cfc1] focus:ring-[#8b7755]">
+                                <SelectValue placeholder="Select engine" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.values(TranslationEngine).map(
+                                  (engine) => (
+                                    <SelectItem key={engine} value={engine}>
+                                      {engine}
+                                    </SelectItem>
+                                  )
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-[#8b7755]">
+                              Font Size: <span>{fontSize}px</span>
+                            </Label>
+                            <Slider
+                              value={[fontSize]}
+                              min={12}
+                              max={24}
+                              step={1}
+                              onValueChange={(value) => setFontSize(value[0])}
+                              className="py-2"
+                            />
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+                      onClick={handlePaste}
                     >
-                      <SelectTrigger className="border-[#d9cfc1] focus:ring-[#8b7755]">
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.values(TranslationType).map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Clipboard className="h-4 w-4" />
+                    </Button>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-[#8b7755]">
-                      Công nghệ dịch
-                    </label>
-                    <Select
-                      value={translationEngine}
-                      onValueChange={setTranslationEngine}
-                    >
-                      <SelectTrigger className="border-[#d9cfc1] focus:ring-[#8b7755]">
-                        <SelectValue placeholder="Select engine" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.values(TranslationEngine).map((engine) => (
-                          <SelectItem key={engine} value={engine}>
-                            {engine}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-[#8b7755] flex justify-between">
-                      Font Size: <span>{fontSize}px</span>
-                    </label>
-                    <Slider
-                      value={[fontSize]}
-                      min={12}
-                      max={24}
-                      step={1}
-                      onValueChange={(value) => setFontSize(value[0])}
-                      className="py-2"
-                    />
-                  </div>
+                </div>
+                <div className="relative h-full">
+                  <Textarea
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Nhập văn bản tiếng Trung ở đây..."
+                    className="min-h-[300px] h-full resize-none border-[#d9cfc1] focus-visible:ring-[#8b7755]"
+                  />
                 </div>
               </CardContent>
             </Card>
+          </div>
 
-            {/* Translate Button */}
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="mb-6 lg:mb-0"
+          {/* Center - Translate Button (visible only on mobile) */}
+          <div className="lg:hidden w-full my-4 flex justify-center">
+            <Button
+              className="w-full bg-[#a08e6c] hover:bg-[#8b7755] text-white flex items-center justify-center gap-2 py-6"
+              onClick={() => handleTranslate()}
             >
-              <Button
-                className="w-full bg-[#a08e6c] hover:bg-[#8b7755] text-white"
-                onClick={handleTranslate}
-              >
-                Dịch
-              </Button>
-            </motion.div>
-          </motion.div>
+              <span>Dịch</span>
+              <ArrowDown className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Center - Translate Button (visible only on desktop) */}
+          <div className="hidden lg:flex items-center justify-center self-start mt-10">
+            <Button
+              className="bg-[#a08e6c] hover:bg-[#8b7755] text-white flex items-center justify-center gap-2"
+              onClick={handleTranslate}
+            >
+              <span>Dịch</span>
+              <ArrowRight className="h-5 w-5" />
+            </Button>
+          </div>
 
           {/* Right Column - Output */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="w-full lg:w-1/2"
-          >
-            <Card className="h-full border-[#d9cfc1] shadow-sm">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-lg text-[#8b7755]">
-                  {translationType}
-                </CardTitle>
-                <motion.div
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={toggleFullscreen}
-                    className="hover:bg-[#f0ebe2] hover:text-[#8b7755]"
-                  >
-                    <Expand className="h-4 w-4" />
-                  </Button>
-                </motion.div>
-              </CardHeader>
-              <CardContent>
+          <div className="w-full lg:w-1/2">
+            <Card className="h-full shadow-sm border-[#d9cfc1]">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-lg font-bold text-[#8b7755]">
+                    Tiếng việt
+                  </Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={copyToClipboard}
+                      className="h-8 w-8 p-0 hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+                    >
+                      {copied ? (
+                        <motion.div
+                          initial={{ scale: 0.8 }}
+                          animate={{ scale: 1 }}
+                          transition={{ duration: 0.2 }}
+                          className="text-green-600"
+                        >
+                          <Check className="h-4 w-4" />
+                        </motion.div>
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleFullscreen}
+                      className="h-8 w-8 p-0 hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+                    >
+                      <Expand className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3 }}
-                  className="p-4 rounded-xl bg-[#f0ebe2] min-h-[250px] whitespace-pre-line"
-                  style={{ fontSize: `${fontSize}px` }}
+                  className="p-4 rounded-xl bg-[#f0ebe2] min-h-[300px] h-full whitespace-pre-line"
+                  style={{
+                    fontSize: `${fontSize}px`,
+                  }}
                   dangerouslySetInnerHTML={{
                     __html: outputText,
                   }}
                 ></motion.div>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         </div>
-      </div>
+      </TabsContent>
+    </motion.div>
+  );
+}
+
+interface TranslateWebsiteTabProps {
+  tabContentVariants: any;
+  translationEngine: string;
+  setTranslationEngine: (engine: string) => void;
+  websiteUrl: string;
+  setWebsiteUrl: (url: string) => void;
+  handleWebsiteTranslate: () => void;
+}
+
+function TranslateWebsiteTab({
+  tabContentVariants,
+  translationEngine,
+  setTranslationEngine,
+  websiteUrl,
+  setWebsiteUrl,
+  handleWebsiteTranslate,
+}: TranslateWebsiteTabProps & {
+  key: string;
+}) {
+  return (
+    <motion.div
+      key="website-tab"
+      variants={tabContentVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
+      <TabsContent value="website" className="mt-0">
+        <Card className="shadow-sm border-[#d9cfc1]">
+          <CardContent className="pt-6">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label className="text-base font-medium text-[#8b7755]">
+                  Website URL
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://example.com"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    className="flex-1 border-[#d9cfc1] focus-visible:ring-[#8b7755]"
+                  />
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Button
+                      className="bg-[#a08e6c] hover:bg-[#8b7755] text-white"
+                      onClick={handleWebsiteTranslate}
+                    >
+                      Dịch
+                    </Button>
+                  </motion.div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[#8b7755]">Công nghệ dịch</Label>
+                  <Select
+                    value={translationEngine}
+                    onValueChange={setTranslationEngine}
+                  >
+                    <SelectTrigger className="border-[#d9cfc1] focus:ring-[#8b7755]">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(TranslationEngine).map((engine) => (
+                        <SelectItem key={engine} value={engine}>
+                          {engine}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="bg-[#f0ebe2] rounded-xl p-6 text-center border border-[#d9cfc1]">
+                <Globe className="h-12 w-12 mx-auto text-[#a08e6c] mb-3" />
+                <h3 className="text-lg font-medium text-[#8b7755] mb-1">
+                  Website Translation
+                </h3>
+                <p className="text-[#8b7755]/70 max-w-md mx-auto">
+                  Enter a URL above to translate an entire website from Chinese
+                  to Vietnamese.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </motion.div>
+  );
+}
+
+interface TranslateFileTabProps {
+  tabContentVariants: any;
+  selectedFile: File | null;
+  setSelectedFile: (file: File | null) => void;
+  isDragging: boolean;
+  setIsDragging: (isDragging: boolean) => void;
+  handleFileDrop: (e: React.DragEvent) => void;
+  handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  translationEngine: string;
+  setTranslationEngine: (engine: string) => void;
+  handleFileTranslate: () => void;
+}
+
+function TranslateFileTab({
+  tabContentVariants,
+  selectedFile,
+  setSelectedFile,
+  isDragging,
+  setIsDragging,
+  handleFileDrop,
+  handleFileSelect,
+  translationEngine,
+  setTranslationEngine,
+  handleFileTranslate,
+}: TranslateFileTabProps & {
+  key: string;
+}) {
+  return (
+    <motion.div
+      key="file-tab"
+      variants={tabContentVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
+      <TabsContent value="file" className="mt-0">
+        <Card className="shadow-sm border-[#d9cfc1]">
+          <CardContent className="pt-6">
+            <div className="space-y-6">
+              <div
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                  isDragging
+                    ? "border-[#8b7755] bg-[#f0ebe2]"
+                    : "border-[#d9cfc1] hover:border-[#a08e6c]"
+                }`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleFileDrop}
+              >
+                <Upload className="h-10 w-10 mx-auto text-[#a08e6c] mb-3" />
+                <h3 className="text-lg font-medium text-[#8b7755] mb-1">
+                  {selectedFile ? selectedFile.name : "Upload a file"}
+                </h3>
+                <p className="text-[#8b7755]/70 mb-4">
+                  {selectedFile
+                    ? `${(selectedFile.size / 1024).toFixed(2)} KB`
+                    : "Drag and drop a file here, or click to browse"}
+                </p>
+                <input
+                  type="file"
+                  id="file-upload"
+                  className="hidden"
+                  accept=".txt,.docx,.pdf"
+                  onChange={handleFileSelect}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    document.getElementById("file-upload")?.click()
+                  }
+                  className="mx-auto border-[#d9cfc1] hover:bg-[#f0ebe2] hover:text-[#8b7755] hover:border-[#8b7755]"
+                >
+                  Browse Files
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[#8b7755]">Công nghệ dịch</Label>
+                  <Select
+                    value={translationEngine}
+                    onValueChange={setTranslationEngine}
+                  >
+                    <SelectTrigger className="border-[#d9cfc1] focus:ring-[#8b7755]">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(TranslationEngine).map((engine) => (
+                        <SelectItem key={engine} value={engine}>
+                          {engine}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button
+                  className="w-full bg-[#a08e6c] hover:bg-[#8b7755] text-white"
+                  onClick={handleFileTranslate}
+                  disabled={!selectedFile}
+                >
+                  Translate File
+                </Button>
+              </motion.div>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </motion.div>
+  );
+}
+
+interface TranslateWebsiteFullscreenProps {
+  websiteUrl: string;
+  setWebsiteUrl: (url: string) => void;
+  handleClickTranslate: () => void;
+  loadingDict: boolean;
+}
+
+function TranslateWebsiteFullscreen({
+  websiteUrl,
+  setWebsiteUrl,
+  handleClickTranslate,
+  loadingDict,
+}: TranslateWebsiteFullscreenProps) {
+  // State for the original HTML content
+  const [sourceHtml, setSourceHtml] = useState<string>("");
+  // State for the translated HTML content (used in srcDoc)
+  const [translatedHtml, setTranslatedHtml] = useState<string>("");
+  const router = useRouter();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const screenRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchHtml = async () => {
+      try {
+        const response = await fetch(
+          "/api/proxy?url=" + encodeURIComponent(websiteUrl)
+        );
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        const html = await response.text();
+        setSourceHtml(html);
+      } catch (error) {
+        console.error("Error fetching HTML:", error);
+      }
+    };
+
+    if (websiteUrl) {
+      fetchHtml();
+    }
+  }, [websiteUrl]);
+
+  // Effect to handle translation when dictionary is loaded or sourceHtml changes
+  useEffect(() => {
+    const handleTranslateSrcDoc = () => {
+      try {
+        const translated = TranslationService.translateHtmlPage(sourceHtml);
+        // Inject script to intercept link clicks
+        const htmlWithScript = injectLinkInterceptor(translated);
+        setTranslatedHtml(htmlWithScript);
+      } catch (error) {
+        console.error("Translation error:", error);
+        setTranslatedHtml(sourceHtml); // Fallback to original HTML
+      }
+    };
+
+    // Only translate if dictionary is loaded
+    if (!loadingDict) {
+      handleTranslateSrcDoc();
+    }
+  }, [sourceHtml, loadingDict]);
+
+  // Function to inject script for intercepting link clicks
+  const injectLinkInterceptor = (html: string): string => {
+    const script = `
+      <script>
+        document.addEventListener('click', (event) => {
+          const link = event.target.closest('a');
+          if (link && link.href) {
+            event.preventDefault();
+            window.parent.postMessage({ type: 'navigate', url: link.href }, '*');
+          }
+        });
+      </script>
+    `;
+    // Insert script before closing </body> or at the end
+    const bodyCloseIndex = html.toLowerCase().lastIndexOf("</body>");
+    if (bodyCloseIndex !== -1) {
+      return (
+        html.slice(0, bodyCloseIndex) + script + html.slice(bodyCloseIndex)
+      );
+    }
+    return html + script;
+  };
+
+  // // Handle navigation messages from iframe
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data.type === "navigate" && event.data.url) {
+        const url = event.data.url;
+        try {
+          router.push(
+            `/dich-trung-viet?url=${encodeURIComponent(url)}`
+          );
+          setWebsiteUrl(url);
+        } catch (error) {
+          console.error("Error fetching new content:", error);
+          // Optionally handle relative links or fallback
+        }
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  return (
+    <div className="h-screen" ref={screenRef}>
+      <Card className="shadow-sm border-[#d9cfc1] bg-[#f8f5f0] h-[50px] z-[10000]">
+        <Container className="flex justify-center items-center h-full space-x-4">
+          {/* arrow go-back */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+            onClick={() => window.history.back()}
+          >
+            <ArrowRight className="h-4 w-4 rotate-180" />
+          </Button>
+
+          <h1 className="text-lg font-bold text-[#8b7755]">
+            <Link href="/dich-trung-viet">Doctruyen</Link>
+          </h1>
+
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://example.com"
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              className="flex-1 border-[#d9cfc1] focus-visible:ring-[#8b7755] bg-white"
+            />
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button
+                className="bg-[#a08e6c] hover:bg-[#8b7755] text-white"
+                onClick={handleClickTranslate}
+              >
+                Dịch
+              </Button>
+            </motion.div>
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 hover:bg-[#f0ebe2] hover:text-[#8b7755]"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="start">
+              <div className="space-y-4">
+                <h4 className="font-bold text-[#8b7755]">Cài đặt</h4>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </Container>
+      </Card>
+      {loadingDict ? (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-[#8b7755]">Loading...</p>
+        </div>
+      ) : (
+        <iframe
+          ref={iframeRef}
+          srcDoc={translatedHtml}
+          className="w-full h-[calc(100vh-50px)]"
+          sandbox="allow-scripts allow-same-origin allow-forms "
+        />
+      )}
     </div>
   );
 }
