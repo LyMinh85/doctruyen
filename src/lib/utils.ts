@@ -59,7 +59,11 @@ export const getKeyFromDictionaryFilePath = (
 export const loadDictionaryByNameInClient = async (
   dictFilePath: DictionaryFilePath
 ): Promise<Record<string, string>> => {
-  const res = await fetch(`${COMPRESSED_DICT_PATH}/${getKeyFromDictionaryFilePath(dictFilePath)}.txt.gz`);
+  const res = await fetch(
+    `${COMPRESSED_DICT_PATH}/${getKeyFromDictionaryFilePath(
+      dictFilePath
+    )}.txt.gz`
+  );
   const arrayBuffer = await res.arrayBuffer();
   const rawDict = await decompressWithPako(arrayBuffer);
   return TranslationService.parseDictionaryFile(rawDict);

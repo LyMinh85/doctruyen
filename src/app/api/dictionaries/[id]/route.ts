@@ -18,7 +18,7 @@ export async function GET(
     }
 
     // Path to the existing .txt file
-    const filePath = join(process.cwd(), "src", dictPath);
+    const filePath = join(process.cwd(), "src/data/dictionaries", dictPath);
     const readStream = createReadStream(filePath);
     const gzip = createGzip();
 

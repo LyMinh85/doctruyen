@@ -1,4 +1,31 @@
 /**
+ * Result object for translation operations
+ */
+interface TranslationResult {
+  text: string;
+  chinesePhraseRanges: CharRange[];
+  vietPhraseRanges: CharRange[];
+}
+
+/**
+ * Result buffer for efficient string construction
+ */
+interface ResultBuffer {
+  text: string;
+  toString(): string;
+  append(str: string): void;
+  remove(index: number, length: number): void;
+}
+
+/**
+ * Wrap types for translation output
+ */
+enum WrapType {
+  NONE = 0,
+  BRACKETS = 1,
+}
+
+/**
  * TranslatorEngine namespace for handling translations
  */
 // Types to improve type safety
@@ -364,31 +391,162 @@ export class TranslationService {
   }
 
   /**
-   * Converts Chinese text to Viet Phrase with one meaning per phrase
+   * Converts Chinese text to Vietnamese phrases with one meaning per phrase
    * @param chinese The Chinese text to convert
    * @param wrapType Type of wrapping (0 = none, 1 = brackets)
    * @param translationAlgorithm Algorithm to use for translation
    * @param prioritizedName Whether to prioritize names
+   * @param isFormatResult Whether to format the final result
    * @returns Object containing the translated text and mapping arrays
    */
   public static chineseToVietPhraseOneMeaning(
     chinese: string,
-    wrapType: number = 0,
+    wrapType: WrapType = WrapType.NONE,
     translationAlgorithm: number = 1,
     prioritizedName: boolean = true,
     isFormatResult: boolean = true
-  ): {
-    text: string;
-    chinesePhraseRanges: CharRange[];
-    vietPhraseRanges: CharRange[];
-  } {
+  ): TranslationResult {
+    // Initialize tracking variables
     this.lastTranslated.vietPhraseOneMeaning = "";
     const chinesePhraseRanges: CharRange[] = [];
     const vietPhraseRanges: CharRange[] = [];
     chinese = this.cleanText(chinese);
 
-    // Using a StringBuilder-like object for efficient string concatenation
-    const result = {
+    // Create result buffer for efficient string building
+    const result = this.createResultBuffer();
+    const lastTranslatedWordRef = {
+      value: this.lastTranslated.vietPhraseOneMeaning,
+    };
+
+    // Load dictionary if needed
+    this.ensureDictionariesLoaded();
+
+    // Process the text
+    const lastChar = chinese.length - 1;
+    let i = 0;
+    let lastCheckEndIndex = -1;
+    let ruleStartIndex = -1;
+    let ruleLength = -1;
+
+    while (i <= lastChar) {
+      // Try to translate the current position
+      const translationResult = this.translateChineseAtPosition(
+        chinese,
+        i,
+        wrapType,
+        translationAlgorithm,
+        prioritizedName,
+        result,
+        lastTranslatedWordRef,
+        chinesePhraseRanges,
+        vietPhraseRanges,
+        lastCheckEndIndex,
+        ruleStartIndex,
+        ruleLength
+      );
+
+      // Update tracking variables
+      if (translationResult.matched) {
+        i += translationResult.advanceBy;
+        lastCheckEndIndex = translationResult.lastCheckEndIndex;
+        ruleStartIndex = translationResult.ruleStartIndex;
+        ruleLength = translationResult.ruleLength;
+      } else {
+        // Handle single character translation as fallback
+        this.translateSingleCharacter(
+          chinese,
+          i,
+          wrapType,
+          result,
+          lastTranslatedWordRef,
+          chinesePhraseRanges,
+          vietPhraseRanges
+        );
+        i++;
+      }
+    }
+
+    // Format result if requested
+    this.lastTranslated.vietPhraseOneMeaning = "";
+    let finalText = result.text;
+
+    if (isFormatResult) {
+      finalText = this.formatResult(finalText);
+      // Apply additional formatting fixes
+      finalText = this.applyFormatFixes(finalText);
+    }
+
+    return {
+      text: finalText,
+      chinesePhraseRanges,
+      vietPhraseRanges,
+    };
+  }
+
+  /**
+   * Applies additional formatting fixes to the translated text
+   * @param text The text to fix
+   * @returns The fixed text
+   */
+  private static applyFormatFixes(text: string): string {
+    // Fix double colons
+    let result = text.replace(/(\d+):{2}/g, "$1:");
+
+    // Fix email addresses - remove spaces after @ symbol
+    result = result.replace(/@\s+/g, "@");
+
+    // Fix website URLs - remove spaces between domain parts
+    result = result.replace(
+      /www\.\s*([a-zA-Z0-9_-]+)\s*\.\s*([a-zA-Z0-9_-]+)/g,
+      "www.$1.$2"
+    );
+
+    // Fix spaces around punctuation
+    result = result.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+    result = result.replace(/\[\s+/g, "[").replace(/\s+\]/g, "]");
+
+    // Fix spaces around punctuation in Vietnamese
+    result = result.replace(/\s+([,.!?:;])/g, "$1");
+
+    // Keep proper spacing for URLs and emails
+    result = result.replace(/(https?:\/\/\S+)\s/g, "$1 ");
+    result = result.replace(/(\S+@\S+\.\S+)\s/g, "$1 ");
+
+    // Preserve table formatting
+    result = this.preserveTableFormatting(result);
+
+    return result;
+  }
+
+  /**
+   * Preserves table formatting in the translated text
+   * @param text The text to process
+   * @returns The text with preserved table formatting
+   */
+  private static preserveTableFormatting(text: string): string {
+    // Identify table-like structures
+    const tablePattern = /([^\n]+:[^\n]+\t[^\n]+:[^\n]+)/g;
+
+    return text.replace(tablePattern, (match) => {
+      // Ensure consistent spacing in table cells
+      return match.replace(/:\s+/g, ": ").replace(/\t\s+/g, "\t");
+    });
+  }
+
+  /**
+   * Ensures all required dictionaries are loaded
+   */
+  private static ensureDictionariesLoaded(): void {
+    if (this.dictionaries.nhanByOneMeaning === null) {
+      this.loadNhanByOneMeaningDictionary();
+    }
+  }
+
+  /**
+   * Creates a result buffer for efficient string building
+   */
+  private static createResultBuffer(): ResultBuffer {
+    return {
       text: "",
       toString: function () {
         return this.text;
@@ -401,374 +559,630 @@ export class TranslationService {
           this.text.substring(0, index) + this.text.substring(index + length);
       },
     };
+  }
 
-    const lastChar = chinese.length - 1;
-    let i = 0;
-    let lastCheckEndIndex = -1;
-    let ruleStartIndex = -1;
-    let ruleLength = -1;
+  /**
+   * Attempts to translate Chinese text at a specific position
+   * @param chinese The Chinese text to translate
+   * @param position Current position in the text
+   * @param wrapType Type of wrapping
+   * @param translationAlgorithm Algorithm to use
+   * @param prioritizedName Whether to prioritize names
+   * @param result Result buffer
+   * @param lastTranslatedWordRef Reference to last translated word
+   * @param chinesePhraseRanges Array of Chinese phrase ranges
+   * @param vietPhraseRanges Array of Vietnamese phrase ranges
+   * @param lastCheckEndIndex Last checked end index
+   * @param ruleStartIndex Rule start index
+   * @param ruleLength Rule length
+   * @returns Translation result and position updates
+   */
+  private static translateChineseAtPosition(
+    chinese: string,
+    position: number,
+    wrapType: WrapType,
+    translationAlgorithm: number,
+    prioritizedName: boolean,
+    result: ResultBuffer,
+    lastTranslatedWordRef: { value: string },
+    chinesePhraseRanges: CharRange[],
+    vietPhraseRanges: CharRange[],
+    lastCheckEndIndex: number,
+    ruleStartIndex: number,
+    ruleLength: number
+  ): {
+    matched: boolean;
+    advanceBy: number;
+    lastCheckEndIndex: number;
+    ruleStartIndex: number;
+    ruleLength: number;
+  } {
+    // Try to match longest phrases first
+    for (let length = this.CHINESE_LOOKUP_MAX_LENGTH; length > 0; length--) {
+      if (chinese.length < position + length) continue;
 
-    // Ensure nhanByOneMeaning dictionary is loaded
-    if (this.dictionaries.nhanByOneMeaning === null) {
-      this.loadNhanByOneMeaningDictionary();
-    }
+      const phrase = chinese.substring(position, position + length);
 
-    const lastTranslatedWordRef = {
-      value: this.lastTranslated.vietPhraseOneMeaning,
-    };
+      // Handle newlines directly
+      if (phrase === "\n") {
+        result.append("\n");
+        return {
+          matched: true,
+          advanceBy: length,
+          lastCheckEndIndex,
+          ruleStartIndex,
+          ruleLength,
+        };
+      }
 
-    while (i <= lastChar) {
-      let matched = false;
-      let canCheckRules = true;
+      // Try to match in the name dictionary first if prioritizing names
+      if (prioritizedName && this.dictionaries.onlyName[phrase] !== undefined) {
+        this.appendTranslatedName(
+          phrase,
+          wrapType,
+          result,
+          lastTranslatedWordRef,
+          vietPhraseRanges
+        );
 
-      // Try to match phrases from longest to shortest
-      for (let j = this.CHINESE_LOOKUP_MAX_LENGTH; j > 0; j--) {
-        if (chinese.length >= i + j) {
-          const phrase = chinese.substring(i, i + j);
-          if (phrase === "主宰") {
-            console.log(`Phrase: ${phrase}, i: ${i}, j: ${j}`);
-          }
+        this.appendSpacingIfNeeded(
+          chinese,
+          position + length - 1,
+          result,
+          lastTranslatedWordRef
+        );
 
-          // Skip if the phrase is empty or contains only whitespace
-          if (phrase === "\n") {
-            result.append("\n");
-            matched = true;
-            i += j;
-            break;
-          }
+        return {
+          matched: true,
+          advanceBy: length,
+          lastCheckEndIndex,
+          ruleStartIndex,
+          ruleLength,
+        };
+      }
 
-          if (
-            prioritizedName &&
-            this.dictionaries.onlyName[phrase] !== undefined
-          ) {
-            if (wrapType === 0) {
-              let translated = this.dictionaries.onlyName[phrase];
-              if (translated.includes("/")) {
-                translated = translated.split("/")[0];
-              }
-              if (translated.includes("|")) {
-                translated = translated.split("|")[0];
-              }
-              if (translated.includes("(")) {
-                translated = translated.split("(")[0];
-              }
+      // Try to match in the Vietnamese phrase dictionary
+      if (this.dictionaries.vietPhraseOneMeaning[phrase] !== undefined) {
+        const shouldTranslate = this.shouldTranslateAsPhrase(
+          chinese,
+          position,
+          length,
+          translationAlgorithm,
+          prioritizedName
+        );
 
-              this.appendTranslatedWordWithIndex(
-                result,
-                translated,
-                lastTranslatedWordRef,
-                result.text.length
-              );
-              vietPhraseRanges.push({
-                startIndex: result.text.length - translated.length,
-                length: translated.length,
-              });
-            } else {
-              let translated = "[" + this.dictionaries.onlyName[phrase] + "]";
-              if (translated.includes("/")) {
-                translated = translated.split("/")[0];
-              }
-              if (translated.includes("|")) {
-                translated = translated.split("|")[0];
-              }
-              if (translated.includes("(")) {
-                translated = translated.split("(")[0];
-              }
+        if (shouldTranslate) {
+          chinesePhraseRanges.push({ startIndex: position, length });
 
-              this.appendTranslatedWordWithIndex(
-                result,
-                translated,
-                lastTranslatedWordRef,
-                result.text.length
-              );
-              vietPhraseRanges.push({
-                startIndex: result.text.length - translated.length,
-                length: translated.length,
-              });
-            }
+          this.appendTranslatedPhrase(
+            phrase,
+            wrapType,
+            result,
+            lastTranslatedWordRef,
+            vietPhraseRanges
+          );
 
-            if (this.nextCharIsChinese(chinese, i + j - 1)) {
-              result.append(" ");
-              lastTranslatedWordRef.value += " ";
-            }
+          this.appendSpacingIfNeeded(
+            chinese,
+            position + length - 1,
+            result,
+            lastTranslatedWordRef
+          );
 
-            if (this.nextCharIsNewline(chinese, i + j - 1)) {
-              result.append("\n");
-              lastTranslatedWordRef.value += "\n";
-            }
-
-            matched = true;
-            i += j;
-            break;
-          } else if (
-            // Try to match in vietPhraseOneMeaning dictionary
-            this.dictionaries.vietPhraseOneMeaning[phrase] !== undefined
-          ) {
-            if (
-              (!prioritizedName || !this.containsName(chinese, i, j)) &&
-              ((translationAlgorithm !== 0 && translationAlgorithm !== 2) ||
-                this.isLongestPhraseInSentence(
-                  chinese,
-                  i,
-                  j,
-                  this.dictionaries.vietPhraseOneMeaning,
-                  translationAlgorithm
-                ) ||
-                (prioritizedName &&
-                  this.dictionaries.onlyName[phrase] !== undefined))
-            ) {
-              chinesePhraseRanges.push({ startIndex: i, length: j });
-
-              if (wrapType === 0) {
-                let translated = this.dictionaries.vietPhraseOneMeaning[phrase];
-                if (translated.includes("/")) {
-                  translated = translated.split("/")[0];
-                }
-
-                if (translated.includes("|")) {
-                  translated = translated.split("|")[0];
-                }
-
-                if (translated.includes("(")) {
-                  translated = translated.split("(")[0];
-                }
-
-                this.appendTranslatedWordWithIndex(
-                  result,
-                  translated,
-                  lastTranslatedWordRef,
-                  result.text.length
-                );
-                vietPhraseRanges.push({
-                  startIndex: result.text.length - translated.length,
-                  length: translated.length,
-                });
-              } else {
-                let translated =
-                  "[" + this.dictionaries.vietPhraseOneMeaning[phrase] + "]";
-                if (translated.includes("/")) {
-                  translated = translated.split("/")[0];
-                }
-
-                if (translated.includes("|")) {
-                  translated = translated.split("|")[0];
-                }
-
-                if (translated.includes("(")) {
-                  translated = translated.split("(")[0];
-                }
-
-                this.appendTranslatedWordWithIndex(
-                  result,
-                  translated,
-                  lastTranslatedWordRef,
-                  result.text.length
-                );
-                vietPhraseRanges.push({
-                  startIndex: result.text.length - translated.length,
-                  length: translated.length,
-                });
-              }
-
-              if (this.nextCharIsChinese(chinese, i + j - 1)) {
-                result.append(" ");
-                lastTranslatedWordRef.value += " ";
-              }
-
-              if (this.nextCharIsNewline(chinese, i + j - 1)) {
-                result.append("\n");
-                lastTranslatedWordRef.value += "\n";
-              }
-
-              matched = true;
-              i += j;
-              break;
-            }
-          }
-          // Check for rule-based translations
-          else if (
-            !phrase.includes("\n") &&
-            !phrase.includes("\t") &&
-            this.dictionaries.nhanByOneMeaning !== null &&
-            canCheckRules &&
-            2 < j &&
-            lastCheckEndIndex < i + j - 1 &&
-            this.isAllChinese(phrase)
-          ) {
-            if (i < ruleStartIndex) {
-              if (ruleStartIndex < i + j && j <= ruleLength - ruleStartIndex) {
-                j = ruleStartIndex - i + 1;
-              }
-            } else {
-              const resultRef = { value: "" };
-              const matchLengthRef = { value: 0 };
-              const matchIndex = this.containsLuatNhan(
-                phrase,
-                this.dictionaries.nhanByOneMeaning,
-                resultRef,
-                matchLengthRef
-              );
-
-              ruleStartIndex = i + matchIndex;
-              ruleLength = ruleStartIndex + matchLengthRef.value;
-
-              if (matchIndex === 0) {
-                if (
-                  this.isLongestPhraseInSentence(
-                    chinese,
-                    i - 1,
-                    matchLengthRef.value - 1,
-                    this.dictionaries.vietPhraseOneMeaning,
-                    translationAlgorithm
-                  )
-                ) {
-                  j = matchLengthRef.value;
-                  chinesePhraseRanges.push({ startIndex: i, length: j });
-
-                  const translated = this.chineseToLuatNhan(
-                    phrase,
-                    this.dictionaries.nhanByOneMeaning
-                  );
-
-                  if (wrapType === 0) {
-                    this.appendTranslatedWordWithIndex(
-                      result,
-                      translated,
-                      lastTranslatedWordRef,
-                      result.text.length
-                    );
-                    vietPhraseRanges.push({
-                      startIndex: result.text.length - translated.length,
-                      length: translated.length,
-                    });
-                  } else {
-                    const wrappedTranslated = "[" + translated + "]";
-                    this.appendTranslatedWordWithIndex(
-                      result,
-                      wrappedTranslated,
-                      lastTranslatedWordRef,
-                      result.text.length
-                    );
-                    vietPhraseRanges.push({
-                      startIndex: result.text.length - wrappedTranslated.length,
-                      length: wrappedTranslated.length,
-                    });
-                  }
-
-                  if (this.nextCharIsChinese(chinese, i + j - 1)) {
-                    result.append(" ");
-                    lastTranslatedWordRef.value += " ";
-                  }
-
-                  matched = true;
-                  i += j;
-                  break;
-                }
-              } else if (matchIndex <= 0) {
-                lastCheckEndIndex = i + j - 1;
-                canCheckRules = false;
-
-                let extendedLength = 100;
-                while (
-                  i + extendedLength < chinese.length &&
-                  this.isChinese(chinese[i + extendedLength - 1])
-                ) {
-                  extendedLength++;
-                }
-
-                if (i + extendedLength <= chinese.length) {
-                  const extendedPhrase = chinese.substring(
-                    i,
-                    i + extendedLength
-                  );
-                  const extendedMatchIndex = this.containsLuatNhan(
-                    extendedPhrase,
-                    this.dictionaries.nhanByOneMeaning,
-                    resultRef,
-                    matchLengthRef
-                  );
-
-                  if (extendedMatchIndex < 0) {
-                    lastCheckEndIndex = i + extendedLength - 1;
-                  }
-                }
-              }
-            }
-          }
+          return {
+            matched: true,
+            advanceBy: length,
+            lastCheckEndIndex,
+            ruleStartIndex,
+            ruleLength,
+          };
         }
       }
 
-      // If no match found, translate character by character
-      if (!matched) {
-        const resultLength = result.text.length;
-        const hanVietLength = this.chineseToHanViet(chinese[i]).length;
+      // Try rule-based translation if other methods failed
+      const ruleResult = this.tryRuleBasedTranslation(
+        chinese,
+        position,
+        length,
+        phrase,
+        wrapType,
+        translationAlgorithm,
+        result,
+        lastTranslatedWordRef,
+        chinesePhraseRanges,
+        vietPhraseRanges,
+        lastCheckEndIndex,
+        ruleStartIndex,
+        ruleLength
+      );
 
-        chinesePhraseRanges.push({ startIndex: i, length: 1 });
+      if (ruleResult.matched) {
+        return ruleResult;
+      } else {
+        lastCheckEndIndex = ruleResult.lastCheckEndIndex;
+        ruleStartIndex = ruleResult.ruleStartIndex;
+        ruleLength = ruleResult.ruleLength;
+      }
+    }
 
-        if (this.isChinese(chinese[i])) {
-          const hanViet = this.chineseToHanViet(chinese[i]);
-          const translatedText = wrapType !== 1 ? hanViet : `[${hanViet}]`;
+    // No match found
+    return {
+      matched: false,
+      advanceBy: 0,
+      lastCheckEndIndex,
+      ruleStartIndex,
+      ruleLength,
+    };
+  }
 
-          this.appendTranslatedWordWithIndex(
-            result,
-            translatedText,
-            lastTranslatedWordRef,
-            result.text.length
+  /**
+   * Attempts to translate using rule-based methods
+   */
+  private static tryRuleBasedTranslation(
+    chinese: string,
+    position: number,
+    length: number,
+    phrase: string,
+    wrapType: WrapType,
+    translationAlgorithm: number,
+    result: ResultBuffer,
+    lastTranslatedWordRef: { value: string },
+    chinesePhraseRanges: CharRange[],
+    vietPhraseRanges: CharRange[],
+    lastCheckEndIndex: number,
+    ruleStartIndex: number,
+    ruleLength: number
+  ): {
+    matched: boolean;
+    advanceBy: number;
+    lastCheckEndIndex: number;
+    ruleStartIndex: number;
+    ruleLength: number;
+  } {
+    // Check if we should attempt rule-based translation
+    const canCheckRules =
+      !phrase.includes("\n") &&
+      !phrase.includes("\t") &&
+      this.dictionaries.nhanByOneMeaning !== null &&
+      2 < length &&
+      lastCheckEndIndex < position + length - 1 &&
+      this.isAllChinese(phrase);
+
+    if (!canCheckRules) {
+      return {
+        matched: false,
+        advanceBy: 0,
+        lastCheckEndIndex,
+        ruleStartIndex,
+        ruleLength,
+      };
+    }
+
+    // Handle rule positioning
+    if (position < ruleStartIndex) {
+      if (
+        ruleStartIndex < position + length &&
+        length <= ruleLength - ruleStartIndex
+      ) {
+        // Adjust length to avoid overlapping with existing rule
+        return {
+          matched: false,
+          advanceBy: 0,
+          lastCheckEndIndex,
+          ruleStartIndex,
+          ruleLength,
+        };
+      }
+    } else {
+      const resultRef = { value: "" };
+      const matchLengthRef = { value: 0 };
+
+      // Check if phrase contains a rule match
+      const matchIndex = this.containsLuatNhan(
+        phrase,
+        this.dictionaries.nhanByOneMeaning,
+        resultRef,
+        matchLengthRef
+      );
+
+      // Update rule position tracking
+      const newRuleStartIndex = position + matchIndex;
+      const newRuleLength = newRuleStartIndex + matchLengthRef.value;
+
+      if (matchIndex === 0) {
+        // Direct match at current position
+        if (
+          this.isLongestPhraseInSentence(
+            chinese,
+            position - 1,
+            matchLengthRef.value - 1,
+            this.dictionaries.vietPhraseOneMeaning,
+            translationAlgorithm
+          )
+        ) {
+          const ruleLength = matchLengthRef.value;
+          chinesePhraseRanges.push({
+            startIndex: position,
+            length: ruleLength,
+          });
+
+          const translated = this.chineseToLuatNhan(
+            phrase,
+            this.dictionaries.nhanByOneMeaning
           );
 
-          if (this.nextCharIsChinese(chinese, i)) {
+          this.appendTranslatedRule(
+            translated,
+            wrapType,
+            result,
+            lastTranslatedWordRef,
+            vietPhraseRanges
+          );
+
+          if (this.nextCharIsChinese(chinese, position + ruleLength - 1)) {
             result.append(" ");
             lastTranslatedWordRef.value += " ";
           }
 
-          const effectiveLength = hanVietLength + (wrapType !== 1 ? 0 : 2);
-          vietPhraseRanges.push({
-            startIndex: resultLength,
-            length: effectiveLength,
-          });
+          return {
+            matched: true,
+            advanceBy: ruleLength,
+            lastCheckEndIndex,
+            ruleStartIndex: newRuleStartIndex,
+            ruleLength: newRuleLength,
+          };
         }
-        //is number or english alphabets
-        else if (
-          chinese[i].match(/^[0-9]+$/) ||
-          chinese[i].match(/^[A-Za-z]+$/)
+      } else if (matchIndex <= 0) {
+        // No direct match but need to extend search
+        const newLastCheckEndIndex = position + length - 1;
+
+        // Try with extended phrase
+        const EXTENDED_LENGTH_MAX = 100; // Define constant for magic number
+        let extendedLength = EXTENDED_LENGTH_MAX;
+
+        // Ensure we don't go beyond the text's length
+        while (
+          position + extendedLength < chinese.length &&
+          this.isChinese(chinese[position + extendedLength - 1])
         ) {
-          result.append(chinese[i]);
-          lastTranslatedWordRef.value += chinese[i];
-          vietPhraseRanges.push({ startIndex: resultLength, length: 1 });
-        } else if (
-          (chinese[i] === '"' || chinese[i] === "'") &&
-          !lastTranslatedWordRef.value.endsWith(" ") &&
-          !lastTranslatedWordRef.value.endsWith(".") &&
-          !lastTranslatedWordRef.value.endsWith("?") &&
-          !lastTranslatedWordRef.value.endsWith("!") &&
-          !lastTranslatedWordRef.value.endsWith("\t") &&
-          i < chinese.length - 1 &&
-          chinese[i + 1] !== " " &&
-          chinese[i + 1] !== ","
-        ) {
-          result.append(" " + chinese[i]);
-          lastTranslatedWordRef.value =
-            lastTranslatedWordRef.value + " " + chinese[i];
-          vietPhraseRanges.push({ startIndex: resultLength, length: 2 });
-        } else {
-          result.append(" " + chinese[i]);
-          lastTranslatedWordRef.value += " " + chinese[i];
-          vietPhraseRanges.push({ startIndex: resultLength, length: 2 });
+          extendedLength++;
         }
 
-        i++;
+        // Check if extended phrase contains a rule
+        if (position + extendedLength <= chinese.length) {
+          const extendedPhrase = chinese.substring(
+            position,
+            position + extendedLength
+          );
+          const extendedMatchIndex = this.containsLuatNhan(
+            extendedPhrase,
+            this.dictionaries.nhanByOneMeaning,
+            resultRef,
+            matchLengthRef
+          );
+
+          if (extendedMatchIndex < 0) {
+            // No match in extended phrase either
+            return {
+              matched: false,
+              advanceBy: 0,
+              lastCheckEndIndex: position + extendedLength - 1,
+              ruleStartIndex: newRuleStartIndex,
+              ruleLength: newRuleLength,
+            };
+          }
+        }
+
+        return {
+          matched: false,
+          advanceBy: 0,
+          lastCheckEndIndex: newLastCheckEndIndex,
+          ruleStartIndex: newRuleStartIndex,
+          ruleLength: newRuleLength,
+        };
       }
     }
 
-    this.lastTranslated.vietPhraseOneMeaning = "";
-    if (isFormatResult) {
-      result.text = this.formatResult(result.text);
-    }
     return {
-      text: result.text,
-      chinesePhraseRanges,
-      vietPhraseRanges,
+      matched: false,
+      advanceBy: 0,
+      lastCheckEndIndex,
+      ruleStartIndex,
+      ruleLength,
     };
+  }
+
+  /**
+   * Appends a translated name to the result
+   */
+  private static appendTranslatedName(
+    phrase: string,
+    wrapType: WrapType,
+    result: ResultBuffer,
+    lastTranslatedWordRef: { value: string },
+    vietPhraseRanges: CharRange[]
+  ): void {
+    let translated = this.dictionaries.onlyName[phrase];
+
+    // Extract first meaning if multiple meanings exist
+    translated = this.extractFirstMeaning(translated);
+
+    if (wrapType === WrapType.BRACKETS) {
+      translated = `[${translated}]`;
+    }
+
+    const startIndex = result.text.length;
+    this.appendTranslatedWordWithIndex(
+      result,
+      translated,
+      lastTranslatedWordRef,
+      startIndex
+    );
+
+    vietPhraseRanges.push({
+      startIndex: startIndex,
+      length: translated.length,
+    });
+  }
+
+  /**
+   * Appends a translated phrase to the result
+   */
+  private static appendTranslatedPhrase(
+    phrase: string,
+    wrapType: WrapType,
+    result: ResultBuffer,
+    lastTranslatedWordRef: { value: string },
+    vietPhraseRanges: CharRange[]
+  ): void {
+    let translated = this.dictionaries.vietPhraseOneMeaning[phrase];
+
+    // Extract first meaning if multiple meanings exist
+    translated = this.extractFirstMeaning(translated);
+
+    if (wrapType === WrapType.BRACKETS) {
+      translated = `[${translated}]`;
+    }
+
+    const startIndex = result.text.length;
+    this.appendTranslatedWordWithIndex(
+      result,
+      translated,
+      lastTranslatedWordRef,
+      startIndex
+    );
+
+    vietPhraseRanges.push({
+      startIndex: startIndex,
+      length: translated.length,
+    });
+  }
+
+  /**
+   * Appends a translated rule to the result
+   */
+  private static appendTranslatedRule(
+    translated: string,
+    wrapType: WrapType,
+    result: ResultBuffer,
+    lastTranslatedWordRef: { value: string },
+    vietPhraseRanges: CharRange[]
+  ): void {
+    const startIndex = result.text.length;
+    const finalTranslated =
+      wrapType === WrapType.BRACKETS ? `[${translated}]` : translated;
+
+    this.appendTranslatedWordWithIndex(
+      result,
+      finalTranslated,
+      lastTranslatedWordRef,
+      startIndex
+    );
+
+    vietPhraseRanges.push({
+      startIndex: startIndex,
+      length: finalTranslated.length,
+    });
+  }
+
+  /**
+   * Extracts the first meaning from a multi-meaning translation
+   */
+  private static extractFirstMeaning(translated: string): string {
+    let result = translated;
+
+    if (result.includes("/")) {
+      result = result.split("/")[0];
+    }
+
+    if (result.includes("|")) {
+      result = result.split("|")[0];
+    }
+
+    if (result.includes("(")) {
+      result = result.split("(")[0];
+    }
+
+    return result.trim(); // Added trim to remove extra whitespace
+  }
+
+  /**
+   * Appends spacing characters if needed based on context
+   */
+  private static appendSpacingIfNeeded(
+    chinese: string,
+    position: number,
+    result: ResultBuffer,
+    lastTranslatedWordRef: { value: string }
+  ): void {
+    if (this.nextCharIsChinese(chinese, position)) {
+      result.append(" ");
+      lastTranslatedWordRef.value += " ";
+    }
+
+    if (this.nextCharIsNewline(chinese, position)) {
+      result.append("\n");
+      lastTranslatedWordRef.value += "\n";
+    }
+  }
+
+  /**
+   * Determines if a phrase should be translated based on the algorithm and context
+   */
+  private static shouldTranslateAsPhrase(
+    chinese: string,
+    position: number,
+    length: number,
+    translationAlgorithm: number,
+    prioritizedName: boolean
+  ): boolean {
+    const phrase = chinese.substring(position, position + length);
+
+    // Don't translate if we should prioritize names and this contains a name
+    if (prioritizedName && this.containsName(chinese, position, length)) {
+      return false;
+    }
+
+    // Check if this is the longest phrase or if we're using a different algorithm
+    if (translationAlgorithm !== 0 && translationAlgorithm !== 2) {
+      return true;
+    }
+
+    return this.isLongestPhraseInSentence(
+      chinese,
+      position,
+      length,
+      this.dictionaries.vietPhraseOneMeaning,
+      translationAlgorithm
+    );
+  }
+
+  /**
+   * Translates a single character when no longer phrase matches
+   */
+  private static translateSingleCharacter(
+    chinese: string,
+    position: number,
+    wrapType: WrapType,
+    result: ResultBuffer,
+    lastTranslatedWordRef: { value: string },
+    chinesePhraseRanges: CharRange[],
+    vietPhraseRanges: CharRange[]
+  ): void {
+    const resultLength = result.text.length;
+    const char = chinese[position];
+
+    chinesePhraseRanges.push({ startIndex: position, length: 1 });
+
+    if (this.isChinese(char)) {
+      // Handle Chinese character
+      const hanViet = this.chineseToHanViet(char);
+      const translatedText =
+        wrapType !== WrapType.BRACKETS ? hanViet : `[${hanViet}]`;
+
+      this.appendTranslatedWordWithIndex(
+        result,
+        translatedText,
+        lastTranslatedWordRef,
+        result.text.length
+      );
+
+      if (this.nextCharIsChinese(chinese, position)) {
+        result.append(" ");
+        lastTranslatedWordRef.value += " ";
+      }
+
+      const effectiveLength =
+        hanViet.length + (wrapType !== WrapType.BRACKETS ? 0 : 2);
+      vietPhraseRanges.push({
+        startIndex: resultLength,
+        length: effectiveLength,
+      });
+    } else if (this.isDirectCopyCharacter(char)) {
+      // Handle characters that are copied directly
+      result.append(char);
+      lastTranslatedWordRef.value += char;
+      vietPhraseRanges.push({ startIndex: resultLength, length: 1 });
+    } else if (
+      this.needsSpaceBefore(char, chinese, position, lastTranslatedWordRef)
+    ) {
+      // Handle characters that need spacing before them
+      result.append(" " + char);
+      lastTranslatedWordRef.value += " " + char;
+      vietPhraseRanges.push({ startIndex: resultLength, length: 2 });
+    } else {
+      // Handle other characters
+      result.append(" " + char);
+      lastTranslatedWordRef.value += " " + char;
+      vietPhraseRanges.push({ startIndex: resultLength, length: 2 });
+    }
+  }
+
+  /**
+   * Special handling for websites and emails to prevent incorrect translation
+   * @param text The text to process
+   * @returns The processed text
+   */
+  private static protectSpecialContent(text: string): string {
+    // Mark URLs and emails with special tags that won't be translated
+    return text
+      .replace(/https?:\/\/\S+/g, (match) => `[[URL]]${match}[[/URL]]`)
+      .replace(/\S+@\S+\.\S+/g, (match) => `[[EMAIL]]${match}[[/EMAIL]]`);
+  }
+
+  /**
+   * Restores special content after translation
+   * @param text The text to process
+   * @returns The processed text
+   */
+  private static restoreSpecialContent(text: string): string {
+    // Remove the special tags
+    return text
+      .replace(/\[\[URL\]\](.*?)\[\[\/URL\]\]/g, "$1")
+      .replace(/\[\[EMAIL\]\](.*?)\[\[\/EMAIL\]\]/g, "$1");
+  }
+
+  /**
+   * Determines if a character should be directly copied without modification
+   */
+  private static isDirectCopyCharacter(char: string): boolean {
+    // Improved regex to catch more direct copy characters
+    return /^[0-9A-Za-z\s\-\,\.\?\!\=\:\;\(\)\[\]\/\\]$/.test(char);
+  }
+
+  /**
+   * Determines if a character needs a space before it based on context
+   */
+  private static needsSpaceBefore(
+    char: string,
+    chinese: string,
+    position: number,
+    lastTranslatedWordRef: { value: string }
+  ): boolean {
+    // Enhanced logic for proper spacing
+    return (
+      (char === '"' || char === "'") &&
+      !lastTranslatedWordRef.value.endsWith(" ") &&
+      !lastTranslatedWordRef.value.endsWith(".") &&
+      !lastTranslatedWordRef.value.endsWith("?") &&
+      !lastTranslatedWordRef.value.endsWith("!") &&
+      !lastTranslatedWordRef.value.endsWith("\t") &&
+      position < chinese.length - 1 &&
+      chinese[position + 1] !== " " &&
+      chinese[position + 1] !== ","
+    );
+  }
+
+  /**
+   * Improves the formatting of colon-separated text (common in web content)
+   * @param text The text to process
+   * @returns The processed text with proper colon formatting
+   */
+  private static improveColonFormatting(text: string): string {
+    // Fix chapter numbers followed by colons
+    return text
+      .replace(/Chương\s+(\d+):{2}/g, "Chương $1:")
+      .replace(/(\d+):{2}/g, "$1:");
   }
 
   /**
@@ -802,13 +1216,17 @@ export class TranslationService {
         const hasChinese = /[\u4e00-\u9fff]/.test(node.textContent);
         if (hasChinese) {
           // Translate the text using chineseToVietPhraseOneMeaning
-          const translationResult = TranslationService.chineseToVietPhraseOneMeaning(
-            node.textContent,
-            wrapType,
-            translationAlgorithm,
-            prioritizedName,
-            isFormatResult,
-          );
+          const translationResult =
+            TranslationService.chineseToVietPhraseOneMeaning(
+              node.textContent,
+              wrapType,
+              translationAlgorithm,
+              prioritizedName,
+              isFormatResult
+            );
+          // uppercase the first letter of the translated text
+          translationResult.text = TranslationService.toUpperCase(translationResult.text.trim());
+
           // Replace the text node's content with the translated text
           node.textContent = translationResult.text;
         }
@@ -1242,6 +1660,11 @@ export class TranslationService {
         .replace(/(?<=\p{Script=Han})了/gu, "")
         // .replace(/了$/gim, "")
         .replaceAll("　　", "")
+        .replaceAll("，", ",")
+        .replaceAll("。", ".")
+        .replaceAll("：", ":")
+        .replaceAll("？", "?")
+        .replaceAll("！", "!")
     );
   }
 
@@ -1254,11 +1677,7 @@ export class TranslationService {
    */
   public static formatResult(text: string) {
     text = text
-      .replaceAll("，", ",")
-      .replaceAll("。", ".")
-      .replaceAll("：", ":")
-      .replaceAll("？", "?")
-      .replaceAll("！", "!")
+
       .replaceAll("“", '"')
       .replaceAll("”", '"')
       .replaceAll("no-meaning", "")
