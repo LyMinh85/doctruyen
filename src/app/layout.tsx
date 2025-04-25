@@ -4,6 +4,7 @@ import "./globals.css";
 import ProgressBarProvider from "@/providers/ProgressBarProvider";
 import { ClerkProvider } from "@clerk/nextjs";
 import { GoogleAnalytics } from '@next/third-parties/google'
+import { Toaster } from "@/components/ui/toaster";
 
 
 const geistSans = Geist({
@@ -34,6 +35,7 @@ export default function RootLayout({
         >
           <ProgressBarProvider>{children}</ProgressBarProvider>
           <GoogleAnalytics gaId="G-18BE59SBKH" />
+          <Toaster />
         </body>
       </html>
     </ClerkProvider>

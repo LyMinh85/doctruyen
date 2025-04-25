@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const html = await fetchProxy(url);
+    const html = await fetchProxy(request, url);
 
     // return the HTML content
     const headers = new Headers();

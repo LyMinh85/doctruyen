@@ -2,7 +2,7 @@
 "use client";
 
 import { AppProgressBar as ProgressBar } from "next-nprogress-bar";
-const gradientColor = "linear-gradient(180deg,#5a67d8,#04c8bb 161.33%)";
+const gradientColor = "linear-gradient(180deg,#8b7755,#8b7755 161.33%)";
 
 const ProgressBarProvider = ({
   children,

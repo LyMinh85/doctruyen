@@ -1,10 +1,12 @@
 import iconv from "iconv-lite";
 import * as cheerio from "cheerio";
+import { NextRequest } from "next/server";
 
-export async function fetchProxy(url: string) {
+export async function fetchProxy(req: NextRequest, url: string) {
+  const userAgent = req.headers.get("user-agent") || "Unknown";  
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; YourApp/1.0)", // Avoid bot detection
+      "User-Agent": userAgent, // Avoid bot detection
     },
   });
 
