@@ -1,17 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FileText, Globe, MessageSquare } from "lucide-react";
-import { DictionaryFilePath, loadDictionaryByNameInClient } from "@/lib/utils";
-import { TranslationService } from "@/services/translate-service";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { useRouter } from "next/navigation";
 import TranslateWebsiteFullscreen from "./TranslateWebsiteFullscreen";
 import TranslateMessageTab from "./TranslateMessageTab";
 import TranslateWebsiteTab from "./TranslateWebsiteTab";
 import TranslateFileTab from "./TranslateFileTab";
-import { toast } from "@/hooks/use-toast";
 import { useDictionaries } from "@/hooks/use-dictionaries";
 
 interface TranslationAppProps {

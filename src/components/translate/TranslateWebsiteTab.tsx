@@ -7,7 +7,14 @@ import { Card, CardContent } from "../ui/card";
 import { Input } from "../ui/input";
 import { TabsContent } from "../ui/tabs";
 import { Label } from "../ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { FullscreenSearchOverlay } from "./TranslateWebsiteFullscreen";
 
 interface TranslateWebsiteTabProps {
   tabContentVariants: any;
@@ -21,6 +28,7 @@ export default function TranslateWebsiteTab({
   key: string;
 }) {
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [isOpenSearchOverlay, setIsOpenSearchOverlay] = useState(false);
   const [translationEngine, setTranslationEngine] = useState<string>(
     TranslationEngine.Vietphrase
   );
@@ -47,6 +55,7 @@ export default function TranslateWebsiteTab({
                     value={websiteUrl}
                     onChange={(e) => setWebsiteUrl(e.target.value)}
                     className="flex-1 border-[#d9cfc1] focus-visible:ring-[#8b7755]"
+                    onClick={() => setIsOpenSearchOverlay(true)}
                   />
                   <motion.div
                     whileHover={{ scale: 1.02 }}
@@ -96,6 +105,12 @@ export default function TranslateWebsiteTab({
             </div>
           </CardContent>
         </Card>
+        <FullscreenSearchOverlay
+          isSearchOpen={isOpenSearchOverlay}
+          setIsSearchOpen={setIsOpenSearchOverlay}
+          setWebsiteUrl={setWebsiteUrl}
+          handleClickTranslate={handleWebsiteTranslate}
+        />
       </TabsContent>
     </motion.div>
   );

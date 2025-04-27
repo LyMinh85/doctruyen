@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Container from "../common/Container";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
-import { ArrowRight, ChevronRight, Search, Settings, X } from "lucide-react";
+import { ChevronRight, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { Input } from "../ui/input";
 import { AnimatePresence, motion } from "framer-motion";
@@ -22,7 +22,11 @@ interface TranslateWebsiteFullscreenProps {
 const quickLinks = [
   { name: "UU đọc sách - Uukanshu", url: "https://uukanshu.cc/quanben/" },
   { name: "Phiêu thiên - Piaotian", url: "https://www.ptwxz.com/" },
-  { name: "SF light novel", url: "https://book.sfacg.com/" },  
+  { name: "SF light novel", url: "https://book.sfacg.com/" },
+  { name: "69shu", url: "https://www.69shuba.com/" },
+  { name: "Sáng thế - chuangshi", url: "https://chuangshi.qq.com/" },
+  { name: "Tung hoành - zhongheng", url: "https://www.zongheng.com/" },
+  { name: "Popo", url: "https://www.popo.tw/" },
 ];
 
 export default function TranslateWebsiteFullscreen({
@@ -159,7 +163,7 @@ export default function TranslateWebsiteFullscreen({
             <Link href="/dich-trung-viet">Doctruyen</Link>
           </h1>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Input
               placeholder="https://example.com"
               value={websiteUrl}
@@ -172,15 +176,6 @@ export default function TranslateWebsiteFullscreen({
               }}
               className="flex-1 border-[#d9cfc1] focus-visible:ring-[#8b7755] bg-white"
             />
-            {/* <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button
-                className="bg-[#a08e6c] hover:bg-[#8b7755] text-white"
-                onClick={() => handleClickTranslate(websiteUrl)}
-              >
-                Dịch
-              </Button>
-            </motion.div> */}
-            {/* Search icon button */}
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Button
                 variant="ghost"
@@ -228,6 +223,7 @@ export default function TranslateWebsiteFullscreen({
         />
       )}
       <FullscreenSearchOverlay
+        setWebsiteUrl={setWebsiteUrl}
         isSearchOpen={isSearchOpen}
         setIsSearchOpen={setIsSearchOpen}
         handleClickTranslate={handleClickTranslate}
@@ -238,16 +234,18 @@ export default function TranslateWebsiteFullscreen({
 
 interface FullscreenSearchOverlayProps {
   isSearchOpen: boolean;
+  setWebsiteUrl: (url: string) => void;
   setIsSearchOpen: (isOpen: boolean) => void;
   handleClickTranslate: (url: string) => void;
 }
 
-function FullscreenSearchOverlay({
+export function FullscreenSearchOverlay({
   isSearchOpen,
   setIsSearchOpen,
-  handleClickTranslate
+  handleClickTranslate,
+  setWebsiteUrl,
 }: FullscreenSearchOverlayProps) {
-  const [searchUrl,  setSearchUrl] = useState<string>("");
+  const [searchUrl, setSearchUrl] = useState<string>("");
 
   return (
     <AnimatePresence>
@@ -313,7 +311,10 @@ function FullscreenSearchOverlay({
                         link.url
                       )}`}
                       className="l flex items-center font-black text-[#8b7755] hover:text-[#8b7755] transition-colors"
-                      onClick={() => setIsSearchOpen(false)}
+                      onClick={() => {
+                        setWebsiteUrl(link.url);
+                        setIsSearchOpen(false);
+                      }}
                     >
                       <span>
                         {link.name} {`(${link.url})`}
